@@ -5,23 +5,35 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..schemas import AgentResponse, GenomePayload, LineageTreeNode
+from .billing_service import BillingService
 from ..utils import short_id
 
 
 class LineageService:
     def __init__(self, db: Session):
         self.db = db
+        self.billing_service = BillingService(db)
 
-    def _get_agent_by_public_id(self, agent_id: str) -> models.Agent:
+    def _get_agent_by_public_id(self, account_id: int, agent_id: str) -> models.Agent:
         agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
+            select(models.Agent).where(
+                models.Agent.account_id == account_id, models.Agent.agent_id == agent_id
+            )
         ).scalar_one_or_none()
         if not agent:
             raise ValueError("Unknown agent_id")
         return agent
 
-    def fork_agent(self, source_agent_id: str, new_name: str, creator: str, jurisdiction: str) -> AgentResponse:
-        source = self._get_agent_by_public_id(source_agent_id)
+    def fork_agent(
+        self,
+        account_id: int,
+        source_agent_id: str,
+        new_name: str,
+        creator: str,
+        jurisdiction: str,
+    ) -> AgentResponse:
+        source = self._get_agent_by_public_id(account_id, source_agent_id)
+
         latest_genome = (
             self.db.execute(
                 select(models.GenomeVersion)
@@ -44,6 +56,10 @@ class LineageService:
         )
         self.db.add(new_agent)
         self.db.flush()
+
+        # Ensure no cycle by validating edge insertion against account boundaries
+        if source.account_id != new_agent.account_id:
+            raise ValueError("Cross-account lineage is not permitted")
 
         new_genome = models.GenomeVersion(
             agent_id=new_agent.id,
@@ -78,13 +94,31 @@ class LineageService:
             created_at=new_agent.created_at,
         )
 
-    def _build_tree(self, agent: models.Agent) -> LineageTreeNode:
+    def _build_tree(self, agent: models.Agent, visited: set[int] | None = None) -> LineageTreeNode:
+        if visited is None:
+            visited = set()
+        if agent.id in visited:
+            return LineageTreeNode(agent_id=agent.agent_id, name=agent.name, status="cycle_blocked", children=[])
+        visited.add(agent.id)
+
         children_edges = self.db.execute(
             select(models.LineageEdge).where(models.LineageEdge.parent_agent_id == agent.id)
         ).scalars()
-        children_nodes = [self._build_tree(edge.child) for edge in children_edges]
-        return LineageTreeNode(agent_id=agent.agent_id, name=agent.name, children=children_nodes)
+        children_nodes = [self._build_tree(edge.child, set(visited)) for edge in children_edges]
+        return LineageTreeNode(
+            agent_id=agent.agent_id,
+            name=agent.name,
+            status=agent.status,
+            children=children_nodes,
+        )
 
-    def get_tree(self, agent_id: str) -> LineageTreeNode:
-        agent = self._get_agent_by_public_id(agent_id)
+    def get_tree(self, account_id: int, agent_id: str, count_usage: bool = True) -> LineageTreeNode:
+        agent = self._get_agent_by_public_id(account_id, agent_id)
+        if count_usage:
+            account = self.db.get(models.Account, account_id)
+            if account is None:
+                raise ValueError("Unknown account")
+            limit = self.billing_service.plan_limit(account=account, metric="lineage_render")
+            self.billing_service.ensure_or_raise(account_id=account.id, metric="lineage_render", limit=limit)
+            self.billing_service.record_usage(account.id, "lineage_render", 1.0)
         return self._build_tree(agent)

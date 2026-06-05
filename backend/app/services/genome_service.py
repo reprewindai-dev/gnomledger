@@ -37,6 +37,8 @@ class GenomeService:
         new_payload.update(payload.changes.model_dump())
         new_hash = stable_hash(new_payload)
         timestamp = utc_now()
+        if new_hash == latest_version.genome_hash:
+            raise ValueError("Genome content unchanged")
 
         new_version = models.GenomeVersion(
             agent_id=agent.id,
@@ -56,6 +58,7 @@ class GenomeService:
         certificate.genome_hash = new_hash
 
         self.db.commit()
+        self.db.refresh(certificate)
 
         self.ledger_service.log_event(
             LedgerEventCreate(
