@@ -26,3 +26,5 @@ build/
 
 .vercel
 tmp_*.log
+
+.env*.local
