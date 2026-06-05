@@ -1,10 +1,27 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _is_serverless_environment() -> bool:
+    return bool(os.getenv("VERCEL"))
+
+
+def _default_database_url() -> str:
+    if _is_serverless_environment():
+        return "sqlite:////tmp/pgl.sqlite3"
+    return "sqlite:///./data/pgl.sqlite3"
+
+
+def _default_certificate_storage_path() -> str:
+    if _is_serverless_environment():
+        return "/tmp/certificates"
+    return "./data/certificates"
 
 
 class Settings(BaseSettings):
@@ -13,7 +30,7 @@ class Settings(BaseSettings):
     app_name: str = "Project Genome Ledger"
     environment: Literal["dev", "staging", "prod"] = "dev"
 
-    database_url: str = "sqlite:///./data/pgl.sqlite3"
+    database_url: str = Field(default_factory=_default_database_url)
     redis_url: str = "redis://localhost:6379/0"
 
     stripe_api_key: str | None = None
@@ -28,7 +45,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=list)
 
     frontend_origin: str | None = None
-    certificate_storage_path: str = "./data/certificates"
+    certificate_storage_path: str = Field(default_factory=_default_certificate_storage_path)
     request_id_header: str = "x-request-id"
 
     @field_validator("environment")
