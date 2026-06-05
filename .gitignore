@@ -25,3 +25,4 @@ dist/
 build/
 
 .vercel
+tmp_*.log
