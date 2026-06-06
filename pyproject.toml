@@ -2,4 +2,17 @@
 name = "project-genome-ledger"
 version = "0.1.0"
 requires-python = "~=3.12.0"
-
+dependencies = [
+  "fastapi==0.110.0",
+  "uvicorn[standard]==0.29.0",
+  "sqlalchemy==2.0.28",
+  "psycopg[binary]==3.3.4",
+  "pydantic==2.13.4",
+  "pydantic-settings==2.14.1",
+  "python-dotenv==1.0.1",
+  "httpx==0.27.0",
+  "loguru==0.7.2",
+  "structlog==24.1.0",
+  "redis==5.0.3",
+  "stripe==7.10.0",
+]
