@@ -200,6 +200,7 @@ Primary routes:
 - `GET /api/v1/lineage/tree/{agent_id}`
 - `GET /api/v1/billing/usage`
 - `GET /api/v1/billing/usage/{metric}/limit`
+- `GET /api/v1/integrations/vekml/agents/{agent_id}/snapshot`
 
 ## State & Data Handling
 

@@ -184,3 +184,23 @@ class UsageLimitResponse(BaseModel):
     used: float
     limit: float
     remaining: float
+
+
+class AdapterUsageLimitResponse(BaseModel):
+    metric: str
+    used: float
+    limit: float
+    remaining: float
+
+
+class VeklmAdapterSnapshot(BaseModel):
+    adapter: Literal["vekml"]
+    exported_at: datetime
+    account_id: int
+    agent: AgentDetailResponse
+    certificate: CertificateDownloadResponse
+    ledger_events: list[LedgerEventResponse]
+    chain_verification: LedgerChainVerifyRequest
+    lineage: LineageTreeNode
+    usage_limits: list[AdapterUsageLimitResponse]
+    snapshot_hash: str

@@ -37,6 +37,7 @@ Primary integration routes:
 - `/api/v1/ledger/agents/{agent_id}`
 - `/api/v1/lineage/tree/{agent_id}`
 - `/api/v1/billing/usage`
+- `/api/v1/integrations/vekml/agents/{agent_id}/snapshot`
 
 ## State & Data Handling
 

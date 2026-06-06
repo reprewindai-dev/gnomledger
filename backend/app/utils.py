@@ -17,6 +17,12 @@ def utc_now_iso() -> str:
     return utc_now().isoformat()
 
 
+def canonical_timestamp(dt: datetime) -> str:
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat(timespec="microseconds")
+
+
 def stable_hash(data: Dict[str, Any]) -> str:
     encoded = json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

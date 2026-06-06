@@ -129,6 +129,7 @@ All API endpoints are rooted at `/api/v1`.
 - `GET /billing/usage`
 - `GET /billing/usage/{metric}/limit`
 - `POST /billing/stripe/webhook`
+- `GET /integrations/vekml/agents/{agent_id}/snapshot`
 
 ## Deploy on Vercel
 

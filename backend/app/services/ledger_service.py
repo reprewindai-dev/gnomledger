@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .. import models
 from ..schemas import LedgerEventCreate, LedgerEventResponse
-from ..utils import short_id, stable_hash, utc_now
+from ..utils import canonical_timestamp, short_id, stable_hash, utc_now
 from .analytics_service import AnalyticsService
 
 
@@ -76,7 +76,7 @@ class LedgerService:
                 "summary": event.summary,
                 "details": event.details,
                 "prev_event_hash": event.prev_event_hash,
-                "created_at": event.created_at.isoformat(),
+                "created_at": canonical_timestamp(event.created_at),
             }
         )
         self.db.add(event)
@@ -197,7 +197,7 @@ class LedgerService:
                     "summary": event.summary,
                     "details": event.details,
                     "prev_event_hash": previous,
-                    "created_at": event.created_at.isoformat(),
+                    "created_at": canonical_timestamp(event.created_at),
                 }
             )
             if expected != event.event_hash:

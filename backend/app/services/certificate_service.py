@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..config import get_settings
 from ..schemas import AgentCreateRequest, AgentResponse
-from ..utils import short_id, stable_hash, utc_now
+from ..utils import canonical_timestamp, short_id, stable_hash, utc_now
 from .analytics_service import AnalyticsService
 from .billing_service import BillingService
 
@@ -132,7 +132,7 @@ class CertificateService:
                 "summary": ledger_event.summary,
                 "details": ledger_event.details,
                 "prev_event_hash": ledger_event.prev_event_hash,
-                "created_at": ledger_event.created_at.isoformat(),
+                "created_at": canonical_timestamp(ledger_event.created_at),
             }
         )
         self.db.add(ledger_event)
