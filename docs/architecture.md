@@ -4,99 +4,105 @@
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| Frontend | Next.js 15 (App Router), TypeScript, Tailwind, Zustand, Recharts | Premium dashboard, certificate viewer, lineage explorer, investor presentation mode |
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Pydantic v2 | Modular services (registry, ledger, lineage, billing, analytics) |
-| Persistence | PostgreSQL 16 (primary), TimescaleDB extension for ledger metrics, Redis for caching + rate limiting | Hot ledger storage + cold archive (S3 + Glacier) |
-| Messaging | AWS SQS (event fan-out), SNS (webhook notifications) | Ensures append-only semantics and downstream audit feeds |
-| Billing | Stripe Billing + Customer Portal + Webhooks | Enforces per-agent certificate fees and metered usage |
-| Auth | Auth0 / Okta Enterprise SSO, API keys signed with HMAC, service-to-service mTLS | RBAC enforced at route + service layer |
-| Observability | OpenTelemetry, Loki, Tempo, Prometheus, Grafana Cloud | Audit logging, business KPIs, anomaly alerts |
-| Infra | Docker, Kubernetes (EKS/GKE), Terraform IaC, ArgoCD | Multi-env (dev/stage/prod) with blue/green deployments |
+| Frontend | React 18, TypeScript, Vite, custom CSS, lucide-react | Control plane, certificate viewer, lineage explorer, investor replay mode |
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Pydantic v2 | Modular services for registry, ledger, lineage, billing, and admin |
+| Persistence | PostgreSQL or SQLite (dev), SQLAlchemy 2.0 | Persistent agent, certificate, ledger, lineage, and billing state |
+| Billing | Stripe Webhooks + internal usage accounting | Enforces issuance and metered usage policies |
+| Auth | API keys validated server-side | RBAC enforced at route and service layer |
+| Observability | Python logging, request IDs, processing time headers | Operational traceability for deployed API calls |
+| Infra | Vercel, Docker, docker-compose | Free-tier deploy target plus container option |
 
 ## Service Modules
 
 1. **Registry Service**
-   - Endpoints: `/agents`, `/certificates`, `/genomes`
+   - Endpoints: `/agents`
    - Responsible for birth certificate issuance, genome storage, and parent linkage.
 2. **Ledger Service**
-   - Endpoints: `/ledger/events`, `/ledger/streams`
-   - Writes append-only events with hash chaining, exposes filtered queries, supports cold-storage export jobs.
+   - Endpoints: `/ledger/events`, `/ledger/agents/{agent_id}`, `/ledger/agents/{agent_id}/verify`
+   - Writes append-only events with hash chaining and exposes chain verification.
 3. **Lineage Service**
-   - Endpoints: `/lineage/tree/{agent_id}`, `/lineage/forks`
-   - Builds DAG from parent-child relationships, caches computed trees, exposes mermaid/JSON for frontend.
+   - Endpoints: `/lineage/tree/{agent_id}`, `/lineage/fork`
+   - Builds ancestry trees from parent-child relationships.
 4. **Billing Service**
-   - Endpoints: `/billing/usage`, `/billing/webhooks`
-   - Reconciles certificate issuance fees, storage usage, lineage renders; integrates with Stripe webhooks.
+   - Endpoints: `/billing/usage`, `/billing/usage/{metric}/limit`, `/billing/stripe/webhook`
+   - Tracks usage, plan limits, and Stripe webhook ingestion.
 5. **Analytics Service**
-   - Streams events to warehouse, powers dashboards for investors and compliance KPIs.
+   - Aggregates usage and investor/demo-facing summary views.
 6. **Admin Service**
-   - Provides RBAC management, audit logs, policy templates, and investor demo controls.
+   - Provides bootstrap and API key management.
 
-All services run within the FastAPI application as modules backed by SQLAlchemy sessions and shared middleware (auth, tracing, rate limiting).
+All services run inside the FastAPI application and share common authentication, database, logging, and request-ID middleware.
 
-## Data Model (simplified)
+## Data Model
 
-- `accounts`: organizations, plan tier, Stripe customer id, feature flags.
-- `users`: belonging to accounts with roles (Owner, Auditor, Operator, InvestorViewer).
-- `agents`: core identity (agent_id, name, owner, jurisdiction, status).
-- `genomes`: versioned config blobs hashed for integrity.
-- `certificates`: birth certificate metadata, pdf link, signature.
-- `ledger_events`: append-only events with `prev_hash`, `event_hash`, tamper-proof chain.
-- `lineage_edges`: records parent-child relationships for DAG reconstruction.
-- `billing_usage`: metered metrics for certificates, storage, lineage renders.
-- `incident_reports`, `deployments`, `test_results`: specialized event tables for fast queries.
+- `accounts`: organizations and plan tier
+- `users`: account users with role assignments
+- `api_keys`: scoped access keys for authenticated access
+- `agents`: core identity records
+- `genome_versions`: versioned genome payloads hashed for integrity
+- `certificates`: birth certificate metadata
+- `ledger_events`: append-only events with `prev_event_hash` and `event_hash`
+- `lineage_edges`: parent-child links for ancestry reconstruction
+- `billing_usage`: metered usage records and period windows
 
-## API Surface (selected endpoints)
+## API Surface
 
 ### Registry
-- `POST /api/v1/agents`: Create agent + issue birth certificate (requires billing quota check).
-- `GET /api/v1/agents/{agent_id}`: Fetch certificate, genome snapshot, and lineage summary.
-- `PATCH /api/v1/agents/{agent_id}/genome`: Submit mutation; records ledger event and new genome hash.
+
+- `POST /api/v1/agents`: Create agent and issue birth certificate
+- `GET /api/v1/agents`: List account agents
+- `GET /api/v1/agents/{agent_id}`: Fetch certificate and genome snapshot
+- `GET /api/v1/agents/{agent_id}/certificate`: Read certificate artifact metadata
+- `PATCH /api/v1/agents/{agent_id}/genome`: Submit a genome update
 
 ### Ledger
-- `POST /api/v1/ledger/events`: Add deployment/test/incident events (idempotency key required).
-- `GET /api/v1/ledger/agents/{agent_id}`: Paginated event history with integrity proofs.
-- `GET /api/v1/ledger/verify`: Runs chain validation job and returns latest hash root.
+
+- `POST /api/v1/ledger/events`: Append deployment, audit, incident, or custom events
+- `GET /api/v1/ledger/agents/{agent_id}`: Read event history
+- `GET /api/v1/ledger/agents/{agent_id}/verify`: Validate chain integrity
 
 ### Lineage
-- `POST /api/v1/lineage/fork`: Fork agent, inherit genome, record ancestry.
-- `GET /api/v1/lineage/tree/{agent_id}`: Return DAG nodes/edges for visualization.
+
+- `POST /api/v1/lineage/fork`: Fork an agent and inherit genome ancestry
+- `GET /api/v1/lineage/tree/{agent_id}`: Read the ancestry tree
 
 ### Billing
-- `GET /api/v1/billing/usage`: Current usage vs quota.
-- `POST /api/v1/billing/stripe/webhook`: Handles invoice.paid, payment_failed, usage_record.summary.
+
+- `GET /api/v1/billing/usage`: Read current usage
+- `GET /api/v1/billing/usage/{metric}/limit`: Read quota and remaining allowance
+- `POST /api/v1/billing/stripe/webhook`: Receive Stripe webhook events
 
 ### Admin
-- `POST /api/v1/admin/rbac/policies`: Define custom policies.
-- `GET /api/v1/admin/audit-log`: Export signed audit trail for regulators.
+
+- `POST /api/v1/admin/bootstrap`: Initialize the first account and owner key
+- `POST /api/v1/admin/accounts/{account_id}/keys`: Create API keys
+- `GET /api/v1/admin/accounts/{account_id}/keys`: List API keys
+- `DELETE /api/v1/admin/accounts/{account_id}/keys/{api_key_id}`: Revoke API keys
 
 ## Auth & RBAC
 
-- Auth0/OIDC for user sessions; service-issued JWTs for API clients with HMAC signature.
-- RBAC roles: `owner`, `admin`, `auditor`, `operator`, `viewer`, `investor_demo`.
-- Route-level dependencies enforce scopes; ledger writes require `operator` or higher, audit exports require `auditor`.
-- API keys scoped per environment with IP allowlists; optional customer-managed keys for Enterprise.
+- API key authentication is the active contract for protected routes.
+- Active roles: `owner`, `admin`, `operator`, `viewer`
+- Route-level dependencies enforce read/write privileges.
+- Agent issuance requires `operator`, `admin`, or `owner`.
 
 ## Observability & Logging
 
-- OpenTelemetry instrumentation on FastAPI routes and SQL queries.
-- Structured logs (JSON) shipped to Loki; audit-specific logs stored immutably in S3 with Glacier backup.
-- Metrics: latency, error rate, ledger throughput, certificate issuance, billing reconciliation lag.
-- Alerts: chain verification failure, quota exhaustion, webhook errors, abnormal incident volume.
+- Logging is configured centrally in the FastAPI app.
+- Each request receives an `x-request-id`.
+- Responses include `x-processing-ms`.
+- Ledger verification and billing usage provide the main operational integrity signals.
 
 ## Infrastructure & Reliability
 
-- **Environments:** dev, staging, prod with separate AWS accounts, network segmentation, and secret stores.
-- **CI/CD:** GitHub Actions → container build → security scan → ArgoCD deploy; migrations run via Alembic jobs.
-- **Backups:** Point-in-time recovery for Postgres, hourly snapshots; ledger events mirrored to S3 with object lock (WORM).
-- **Rate Limiting:** Redis-based leaky bucket per API key + global circuit breaker.
-- **Secrets Management:** AWS Secrets Manager; rotated via Lambda automation.
+- **Environments:** local, preview, and production deployments are supported.
+- **CI/CD:** git push to Vercel is the active hosted deployment path.
+- **Backups:** production durability depends on the configured backing database provider.
+- **Secrets Management:** environment variables drive deployment-time configuration.
+- **Rate Limiting:** not yet implemented as a dedicated middleware layer.
 
 ## Scaling Considerations
 
-- Horizontal scaling of FastAPI via ASGI workers on Kubernetes.
-- Ledger writes batched via SQS to reduce contention; read replicas handle analytics queries.
-- Cold storage lifecycle policies to offload historical ledger events while keeping proofs accessible.
-- Precomputed lineage trees cached and invalidated on forks/mutations.
-
-This architecture enables the Project Genome Ledger to meet SecEd standards while remaining modular for future feature growth and investor demonstrations.
+- Service logic is already separated into modules for later extraction if the system is split.
+- The API contract is stable enough to serve as a VEKLM module boundary.
+- Export artifacts provide a clean bridge into other control-plane systems.
