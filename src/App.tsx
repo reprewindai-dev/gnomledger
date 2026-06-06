@@ -38,18 +38,19 @@ import type {
 } from "./types";
 
 const sessionStorageKey = "pgl-session";
+type WorkspaceSection = "registry" | "certificates" | "ledger" | "lineage" | "billing" | "investor";
 const demoSession: SessionState = {
   apiKey: "demo-mode",
   accountId: 0,
   role: "investor"
 };
-const navItems: Array<{ label: string; icon: LucideIcon }> = [
-  { label: "Registry", icon: Bot },
-  { label: "Certificates", icon: BookLock },
-  { label: "Ledger", icon: ReceiptText },
-  { label: "Lineage", icon: GitBranch },
-  { label: "Billing", icon: Activity },
-  { label: "Investor Mode", icon: Sparkles }
+const navItems: Array<{ label: string; icon: LucideIcon; section: WorkspaceSection }> = [
+  { label: "Registry", icon: Bot, section: "registry" },
+  { label: "Certificates", icon: BookLock, section: "certificates" },
+  { label: "Ledger", icon: ReceiptText, section: "ledger" },
+  { label: "Lineage", icon: GitBranch, section: "lineage" },
+  { label: "Billing", icon: Activity, section: "billing" },
+  { label: "Investor Mode", icon: Sparkles, section: "investor" }
 ];
 
 function readSession(): SessionState | null {
@@ -76,6 +77,16 @@ function tokenRows(genome: GenomePayload) {
 
 function flattenLineage(node: LineageTreeNode, depth = 0): Array<LineageTreeNode & { depth: number }> {
   return [{ ...node, depth }, ...node.children.flatMap((child) => flattenLineage(child, depth + 1))];
+}
+
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function App() {
@@ -107,6 +118,7 @@ export default function App() {
   const [busy, setBusy] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [demoMode, setDemoMode] = useState<boolean>(true);
+  const [activeSection, setActiveSection] = useState<WorkspaceSection>("certificates");
   const activeSession = session ?? (demoMode ? demoSession : null);
 
   useEffect(() => {
@@ -231,6 +243,42 @@ export default function App() {
     [usage]
   );
 
+  function focusSection(section: WorkspaceSection) {
+    setActiveSection(section);
+    document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function handleExportCompliancePacket() {
+    if (!selectedAgent) {
+      setMessage("Select an agent before exporting a compliance packet.");
+      return;
+    }
+
+    downloadJson(`${selectedAgent.agent_id}-compliance-packet.json`, {
+      exported_at: new Date().toISOString(),
+      mode: session ? "live" : "investor_replay",
+      agent: selectedAgent,
+      ledger_events: ledgerEvents,
+      lineage,
+      chain_status: chainStatus,
+      usage_limit: usageLimit
+    });
+    setMessage(`Compliance packet exported for ${selectedAgent.name}.`);
+  }
+
+  function handleGenerateInvestorReplay() {
+    const replayPayload = {
+      exported_at: new Date().toISOString(),
+      selected_agent_id: selectedAgentId,
+      bundle: demoBundle,
+      current_agent: selectedAgent,
+      current_ledger: ledgerEvents,
+      current_lineage: lineage
+    };
+    downloadJson(`${selectedAgentId || "investor"}-replay.json`, replayPayload);
+    setMessage("Investor replay package generated.");
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -245,8 +293,12 @@ export default function App() {
         </div>
 
         <nav className="nav-stack">
-          {navItems.map(({ label, icon: Icon }) => (
-            <button className="nav-item" key={label}>
+          {navItems.map(({ label, icon: Icon, section }) => (
+            <button
+              className={`nav-item ${activeSection === section ? "active" : ""}`}
+              key={label}
+              onClick={() => focusSection(section)}
+            >
               <Icon size={16} />
               <span>{label}</span>
             </button>
@@ -311,7 +363,7 @@ export default function App() {
 
         {message ? <div className="message-strip">{message}</div> : null}
 
-        <section className="hero-grid">
+        <section className="hero-grid" id="certificates">
           <div className="issue-panel">
             <div className="panel-head">
               <span>Certificate issuance workspace</span>
@@ -439,7 +491,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="lineage-panel">
+          <div className="lineage-panel" id="lineage">
             <div className="panel-head">
               <span>Lineage explorer</span>
               <strong>Fork ancestry and identity continuity</strong>
@@ -467,7 +519,7 @@ export default function App() {
         </section>
 
         <section className="content-grid">
-          <div className="registry-panel">
+          <div className="registry-panel" id="registry">
             <div className="panel-head">
               <span>Agent registry</span>
               <strong>{agents.length} tracked identities</strong>
@@ -497,7 +549,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="ledger-panel">
+          <div className="ledger-panel" id="ledger">
             <div className="panel-head">
               <span>Life ledger</span>
               <strong>
@@ -528,7 +580,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="rail-panel">
+          <div className="rail-panel" id="billing">
             <div className="panel-head">
               <span>Billing and controls</span>
               <strong>Quota, integrity, export</strong>
@@ -563,7 +615,7 @@ export default function App() {
               </div>
 
               {selectedAgent ? (
-                <div className="detail-card">
+                <div className="detail-card" id="investor">
                   <p>Selected certificate</p>
                   <strong>{selectedAgent.certificate_id}</strong>
                   <span>{selectedAgent.certificate_uri ?? "Artifact persisted in configured storage"}</span>
@@ -571,12 +623,12 @@ export default function App() {
               ) : null}
 
               <div className="action-list">
-                <button className="rail-action">
+                <button className="rail-action" onClick={handleExportCompliancePacket}>
                   <ShieldCheck size={15} />
                   <span>Export compliance packet</span>
                   <ChevronRight size={15} />
                 </button>
-                <button className="rail-action">
+                <button className="rail-action" onClick={handleGenerateInvestorReplay}>
                   <BookLock size={15} />
                   <span>Generate investor replay</span>
                   <ChevronRight size={15} />
