@@ -2,6 +2,7 @@
 env/
 .env
 .env.local
+node_modules/
 *.sqlite3
 *.db
 __pycache__/
@@ -26,5 +27,7 @@ build/
 
 .vercel
 tmp_*.log
+tmp_*.txt
 
 .env*.local
+*.tsbuildinfo
