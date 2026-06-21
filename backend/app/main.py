@@ -59,6 +59,58 @@ def _build_app() -> FastAPI:
     async def health_check():
         return HealthResponse(status="ok", timestamp=utc_now())
 
+    @app.get("/.well-known/x402.json", tags=["discovery"])
+    async def x402_discovery():
+        return {
+            "x402_version": 2,
+            "provider": "GnomLedger — Programmable Governance Layer",
+            "network": "eip155:8453",
+            "payTo": "0xCC34553b4e6332ffb9C1b61E22436ACA53113D1d",
+            "currency": "USDC",
+            "identity": {
+                "veklom_id_app": "6a20f24cc341f72c2f573eb5",
+                "veklom_id_wallet": "0x3a74772e925b54F7dAD7FD95c9Ba30825033f970",
+                "verification_domain": "veklom-id.vercel.app",
+            },
+            "routes": [
+                {
+                    "route": "POST /api/v1/agents",
+                    "price": "$0.010",
+                    "description": "Register a new agent identity and issue a birth certificate with PGL hash.",
+                    "tags": ["pgl", "agent", "identity", "register", "veklom"],
+                },
+                {
+                    "route": "GET /api/v1/agents/{id}",
+                    "price": "$0.003",
+                    "description": "Retrieve agent genome, birth certificate, and lifecycle state.",
+                    "tags": ["pgl", "agent", "genome", "veklom"],
+                },
+                {
+                    "route": "GET /api/v1/agents/{id}/lineage",
+                    "price": "$0.005",
+                    "description": "Trace full agent lineage tree — forks, ancestry, and provenance chain.",
+                    "tags": ["pgl", "lineage", "provenance", "veklom"],
+                },
+                {
+                    "route": "GET /api/v1/ledger",
+                    "price": "$0.005",
+                    "description": "Query the append-only life ledger with hash-chain integrity verification.",
+                    "tags": ["pgl", "ledger", "audit", "hash-chain", "veklom"],
+                },
+                {
+                    "route": "POST /api/v1/agents/{id}/fork",
+                    "price": "$0.015",
+                    "description": "Fork an agent genome, creating a new derived agent with ancestry link.",
+                    "tags": ["pgl", "fork", "genome", "agent", "veklom"],
+                },
+            ],
+            "discovery": {
+                "bazaar": "https://bazaar.cdp.coinbase.com",
+                "openapi": "https://pgl.veklom.com/docs",
+                "veklom_id": "https://veklom-id.vercel.app",
+            },
+        }
+
     return app
 
 
