@@ -1,9 +1,16 @@
 import type {
   AgentDetail,
+  AuditReminder,
   BillingUsage,
   BootstrapResponse,
+  ExecutionIdentityV1,
+  GoogleSheetsSyncConfig,
+  GoogleSheetsSyncResult,
+  IncidentRecord,
   LedgerEvent,
   LineageTreeNode,
+  NotaryChatRequest,
+  NotaryChatResponse,
   SessionState,
   UsageLimit
 } from "./types";
@@ -103,4 +110,73 @@ export function getUsage(session: SessionState) {
 
 export function getUsageLimit(session: SessionState, metric: string) {
   return request<UsageLimit>(`/billing/usage/${metric}/limit`, undefined, session);
+}
+
+// ---------------------------------------------------------------------------
+// Notary (Gemini AI — server-side)
+// ---------------------------------------------------------------------------
+
+export function notaryChat(session: SessionState, payload: NotaryChatRequest) {
+  return request<NotaryChatResponse>("/notary/chat", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, session);
+}
+
+// ---------------------------------------------------------------------------
+// Incidents
+// ---------------------------------------------------------------------------
+
+export function listIncidents(session: SessionState, agentId?: string) {
+  const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+  return request<IncidentRecord[]>(`/incidents${qs}`, undefined, session);
+}
+
+export function createIncident(session: SessionState, payload: Omit<IncidentRecord, "incident_id" | "created_at" | "resolved_at">) {
+  return request<IncidentRecord>("/incidents", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, session);
+}
+
+export function updateIncident(session: SessionState, incidentId: string, payload: Partial<IncidentRecord>) {
+  return request<IncidentRecord>(`/incidents/${incidentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  }, session);
+}
+
+// ---------------------------------------------------------------------------
+// Audit Reminders
+// ---------------------------------------------------------------------------
+
+export function listAuditReminders(session: SessionState, agentId?: string) {
+  const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+  return request<AuditReminder[]>(`/reminders${qs}`, undefined, session);
+}
+
+export function createAuditReminder(session: SessionState, payload: Omit<AuditReminder, "reminder_id" | "created_at" | "last_triggered_at">) {
+  return request<AuditReminder>("/reminders", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, session);
+}
+
+// ---------------------------------------------------------------------------
+// Google Sheets Sync
+// ---------------------------------------------------------------------------
+
+export function googleSheetsSync(session: SessionState, config: GoogleSheetsSyncConfig) {
+  return request<GoogleSheetsSyncResult>("/integrations/google-sheets/sync", {
+    method: "POST",
+    body: JSON.stringify(config)
+  }, session);
+}
+
+// ---------------------------------------------------------------------------
+// Execution Identity V1
+// ---------------------------------------------------------------------------
+
+export function getExecutionIdentity(session: SessionState, agentId: string) {
+  return request<ExecutionIdentityV1>(`/agents/${agentId}/identity`, undefined, session);
 }

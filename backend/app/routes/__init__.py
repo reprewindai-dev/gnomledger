@@ -1,16 +1,18 @@
 from fastapi import APIRouter
 
-from . import admin, agents, billing, integrations, lineage, ledger
+from .admin import router as admin_router
+from .agents import router as agents_router
+from .billing import router as billing_router
+from .integrations import router as integrations_router
+from .ledger import router as ledger_router
+from .lineage import router as lineage_router
+from .notary import router as notary_router
 
-__all__ = ["admin", "agents", "ledger", "lineage", "billing", "integrations", "create_api_router"]
-
-
-def create_api_router() -> APIRouter:
-    router = APIRouter(prefix="/api/v1")
-    router.include_router(agents.router, prefix="/agents", tags=["agents"])
-    router.include_router(ledger.router, prefix="/ledger", tags=["ledger"])
-    router.include_router(lineage.router, prefix="/lineage", tags=["lineage"])
-    router.include_router(billing.router, prefix="/billing", tags=["billing"])
-    router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
-    router.include_router(admin.router, prefix="/admin", tags=["admin"])
-    return router
+api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(admin_router)
+api_router.include_router(agents_router)
+api_router.include_router(billing_router)
+api_router.include_router(integrations_router)
+api_router.include_router(ledger_router)
+api_router.include_router(lineage_router)
+api_router.include_router(notary_router)

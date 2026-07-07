@@ -82,3 +82,83 @@ export interface DemoBundle {
   usage: BillingUsage[];
   usageLimit: UsageLimit;
 }
+
+// ---------------------------------------------------------------------------
+// Migrated from pgl-studioai
+// ---------------------------------------------------------------------------
+
+export type IncidentSeverity = "low" | "medium" | "high" | "critical";
+export type IncidentStatus = "open" | "investigating" | "resolved" | "closed";
+
+export interface IncidentRecord {
+  incident_id: string;
+  agent_id: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  title: string;
+  description: string;
+  reporter: string;
+  resolution_notes: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export type AuditReminderFrequency = "once" | "daily" | "weekly" | "monthly";
+
+export interface AuditReminder {
+  reminder_id: string;
+  agent_id: string;
+  title: string;
+  message: string;
+  frequency: AuditReminderFrequency;
+  next_trigger_at: string;
+  last_triggered_at: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
+
+export interface NotaryChatRequest {
+  message: string;
+  agent_id?: string;
+  model?: string;
+}
+
+export interface NotaryChatResponse {
+  reply: string;
+  model_used: string;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface GoogleSheetsSyncConfig {
+  spreadsheet_id: string;
+  sheet_name: string;
+  agent_id?: string;
+  include_ledger: boolean;
+  include_incidents: boolean;
+}
+
+export interface GoogleSheetsSyncResult {
+  rows_written: number;
+  sheet_url: string;
+  synced_at: string;
+}
+
+export interface ExecutionIdentityV1 {
+  agent_id: string;
+  identity_hash: string;
+  genome_hash: string;
+  certificate_id: string;
+  jurisdiction: string;
+  declared_purpose: string;
+  risk_category: RiskCategory;
+  issued_at: string;
+  signature: string;
+}

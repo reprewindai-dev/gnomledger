@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     JSON,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -100,6 +102,8 @@ class Agent(Base):
     child_edges: Mapped[list["LineageEdge"]] = relationship(
         back_populates="parent", foreign_keys="LineageEdge.parent_agent_id", cascade="all, delete-orphan"
     )
+    incidents: Mapped[list["IncidentRecord"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    audit_reminders: Mapped[list["AuditReminder"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
 
 
 class GenomeVersion(Base):
@@ -203,3 +207,61 @@ class AnalyticsEvent(Base):
 
     account: Mapped[Account | None] = relationship()
 
+
+# ---------------------------------------------------------------------------
+# Migrated from pgl-studioai
+# ---------------------------------------------------------------------------
+
+class IncidentRecord(Base):
+    """Tracks operational incidents linked to a registered agent."""
+    __tablename__ = "incident_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"), nullable=False)
+    incident_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    severity: Mapped[str] = mapped_column(
+        String(16), nullable=False,
+        # low | medium | high | critical
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="open",
+        # open | investigating | resolved | closed
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    reporter: Mapped[str] = mapped_column(String(255), nullable=False)
+    resolution_notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    agent: Mapped[Agent] = relationship(back_populates="incidents")
+
+    __table_args__ = (
+        CheckConstraint("severity IN ('low','medium','high','critical')", name="ck_incident_severity"),
+        CheckConstraint("status IN ('open','investigating','resolved','closed')", name="ck_incident_status"),
+    )
+
+
+class AuditReminder(Base):
+    """Scheduled audit reminders for registered agents."""
+    __tablename__ = "audit_reminders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"), nullable=False)
+    reminder_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    frequency: Mapped[str] = mapped_column(
+        String(16), nullable=False,
+        # once | daily | weekly | monthly
+    )
+    next_trigger_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    agent: Mapped[Agent] = relationship(back_populates="audit_reminders")
+
+    __table_args__ = (
+        CheckConstraint("frequency IN ('once','daily','weekly','monthly')", name="ck_reminder_frequency"),
+    )
