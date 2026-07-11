@@ -12,6 +12,7 @@ from .config import get_settings
 from .database import init_database
 from .routes import create_api_router
 from .schemas import ErrorResponse, HealthResponse
+from .services.x402_service import build_discovery_manifest
 from .utils import utc_now
 
 
@@ -37,6 +38,13 @@ def _build_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(create_api_router())
+
+    @app.get("/.well-known/x402")
+    def x402_discovery() -> dict:
+        # Zero-auth, machine-readable pricing manifest. Any agent can fetch
+        # this to learn what's payable here and how, per the x402 spec
+        # convention of serving discovery at .well-known.
+        return build_discovery_manifest()
 
     @app.middleware("http")
     async def request_identity(request: Request, call_next):

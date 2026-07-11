@@ -12,7 +12,7 @@ from .. import models
 from ..schemas import BillingUsageResponse, UsageLimitResponse
 from ..services.billing_service import BillingService
 
-router = APIRouter()
+router = APIRouter(prefix="/billing")
 settings = get_settings()
 
 

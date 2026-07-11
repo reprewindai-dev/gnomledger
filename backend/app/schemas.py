@@ -170,7 +170,7 @@ class ApiKeyListItem(BaseModel):
 class BootstrapRequest(BaseModel):
     bootstrap_token: str = Field(min_length=1)
     account_name: str = Field(min_length=1, max_length=255)
-    account_tier: Literal["launch", "scale", "enterprise"] = "launch"
+    account_tier: Literal["free", "launch", "scale", "enterprise"] = "free"
     admin_name: str = Field(default="genome-ledger-admin", max_length=255)
 
 
@@ -204,3 +204,49 @@ class VeklmAdapterSnapshot(BaseModel):
     lineage: LineageTreeNode
     usage_limits: list[AdapterUsageLimitResponse]
     snapshot_hash: str
+
+
+class IncidentCreate(BaseModel):
+    agent_id: str
+    severity: Literal["low", "medium", "high", "critical"]
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=1)
+    reporter: str = Field(min_length=1, max_length=255)
+
+
+class IncidentResponse(BaseModel):
+    incident_id: str
+    agent_id: str
+    severity: Literal["low", "medium", "high", "critical"]
+    status: Literal["open", "investigating", "resolved", "closed"]
+    title: str
+    description: str
+    reporter: str
+    resolution_notes: str | None
+    created_at: datetime
+    resolved_at: datetime | None
+
+
+class IncidentUpdate(BaseModel):
+    status: Literal["open", "investigating", "resolved", "closed"]
+    resolution_notes: str | None = None
+
+
+class AuditReminderCreate(BaseModel):
+    agent_id: str
+    title: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1)
+    frequency: Literal["once", "daily", "weekly", "monthly"]
+    next_trigger_at: datetime
+
+
+class AuditReminderResponse(BaseModel):
+    reminder_id: str
+    agent_id: str
+    title: str
+    message: str
+    frequency: Literal["once", "daily", "weekly", "monthly"]
+    next_trigger_at: datetime
+    last_triggered_at: datetime | None
+    is_active: bool
+    created_at: datetime

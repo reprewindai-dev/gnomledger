@@ -48,6 +48,19 @@ class Settings(BaseSettings):
     certificate_storage_path: str = Field(default_factory=_default_certificate_storage_path)
     request_id_header: str = "x-request-id"
 
+    # x402 micropayments — pay-per-call access, no account/subscription required.
+    # See https://x402.org for the protocol spec. FACILITATOR is the service
+    # that verifies/settles USDC payments; Coinbase runs a public one, or you
+    # can self-host. This must be set to a real facilitator URL before x402
+    # payments will actually settle — until then, discovery works but payment
+    # verification will fail closed (see dependencies.py).
+    x402_enabled: bool = False
+    x402_facilitator_url: str | None = None
+    x402_pay_to_address: str | None = None  # wallet that receives payment, e.g. 0x3a74...
+    x402_network: Literal["base", "base-sepolia"] = "base"
+    x402_asset: str = "USDC"
+    x402_pool_account_id: int | None = None  # reserved account that holds anonymous pay-per-call agents; must be seeded via migration before x402 write endpoints work end-to-end
+
     @field_validator("environment")
     @classmethod
     def _normalize_env(cls, value: str) -> str:

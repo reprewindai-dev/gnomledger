@@ -7,7 +7,7 @@ from ..dependencies import get_db, require_role
 from ..schemas import VeklmAdapterSnapshot
 from ..services.adapter_service import AdapterService
 
-router = APIRouter()
+router = APIRouter(prefix="/integrations")
 
 
 @router.get("/vekml/agents/{agent_id}/snapshot", response_model=VeklmAdapterSnapshot)

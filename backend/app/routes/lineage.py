@@ -7,7 +7,7 @@ from ..dependencies import get_db, require_role
 from ..schemas import AgentResponse, LineageForkRequest, LineageTreeNode
 from ..services.lineage_service import LineageService
 
-router = APIRouter()
+router = APIRouter(prefix="/lineage")
 
 
 @router.post("/fork", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)

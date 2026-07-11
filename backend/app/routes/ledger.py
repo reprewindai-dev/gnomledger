@@ -7,7 +7,7 @@ from ..dependencies import get_db, require_role
 from ..schemas import LedgerChainVerifyRequest, LedgerEventCreate, LedgerEventResponse
 from ..services.ledger_service import LedgerService
 
-router = APIRouter()
+router = APIRouter(prefix="/ledger")
 
 
 @router.post("/events", response_model=LedgerEventResponse, status_code=status.HTTP_201_CREATED)

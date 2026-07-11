@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_db, require_role
+from ..dependencies import get_db, require_role, require_apikey_or_x402
+from ..config import get_settings
 from ..schemas import (
     CertificateDownloadResponse,
     AgentCreateRequest,
@@ -17,18 +18,38 @@ from ..services.certificate_service import CertificateService
 from ..services.genome_service import GenomeService
 from .. import models
 
-router = APIRouter()
+router = APIRouter(prefix="/agents")
 
 
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 def create_agent(
     payload: AgentCreateRequest,
     db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    ctx=Depends(require_apikey_or_x402("/api/v1/agents", "POST")),
 ) -> AgentResponse:
+    account_id = ctx.account_id
+    if account_id == 0:
+        # x402 pay-per-call caller with no account of their own. They still
+        # need a real account row for the agent/lineage/quota FKs. This
+        # requires a reserved "x402 pool" account to exist in the DB —
+        # NOT YET CREATED. Until a migration seeds it (see BLOCKERS below),
+        # anonymous x402 calls to this endpoint will fail here rather than
+        # silently attach to a wrong/fake account.
+        settings = get_settings()
+        reserved_id = getattr(settings, "x402_pool_account_id", None)
+        if not reserved_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=(
+                    "x402 payment verified, but no reserved pool account is configured "
+                    "to hold anonymous agents. Set X402_POOL_ACCOUNT_ID after seeding it."
+                ),
+            )
+        account_id = reserved_id
+
     service = CertificateService(db)
     try:
-        return service.register_agent(payload, account_id=ctx.account_id)
+        return service.register_agent(payload, account_id=account_id)
     except ValueError as exc:
         status_code = status.HTTP_402_PAYMENT_REQUIRED if "quota" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc

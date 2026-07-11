@@ -10,7 +10,7 @@ from .. import models
 from ..schemas import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyListItem, BootstrapRequest
 from ..services.key_service import ApiKeyService
 
-router = APIRouter()
+router = APIRouter(prefix="/admin")
 settings = get_settings()
 
 
