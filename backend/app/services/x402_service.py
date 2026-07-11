@@ -67,12 +67,23 @@ def build_discovery_manifest() -> dict:
     else:
         pay_to = settings.x402_pay_to_address
 
+    network_uri = "eip155:8453" if settings.x402_network == "base" else "eip155:84532"
+
     return {
-        "x402Version": 1,
-        "resources": [
+        "x402_version": 2,
+        "provider": "GnomLedger — Programmable Governance Layer",
+        "network": network_uri,
+        "payTo": pay_to,
+        "currency": settings.x402_asset,
+        "identity": {
+            "veklom_id_app": "6a20f24cc341f72c2f573eb5",
+            "veklom_id_wallet": "0x3a74772e925b54F7dAD7FD95c9Ba30825033f970",
+            "verification_domain": "veklom-id.vercel.app",
+        },
+        "routes": [
             {
-                "resource": p.resource,
-                "method": p.method,
+                "route": f"{p.method} {p.resource}",
+                "price": f"${p.price_usdc}",
                 "description": p.description,
                 "accepts": [
                     {
@@ -84,10 +95,14 @@ def build_discovery_manifest() -> dict:
                         "mimeType": "application/json",
                         "payTo": pay_to,
                         "asset": settings.x402_asset,
-                        "extra": {"price_display": f"${p.price_usdc} {settings.x402_asset}"},
                     }
                 ],
             }
             for p in PRICING
         ],
+        "discovery": {
+            "bazaar": "https://bazaar.cdp.coinbase.com",
+            "openapi": "https://pgl.veklom.com/docs",
+            "veklom_id": "https://veklom-id.vercel.app",
+        },
     }

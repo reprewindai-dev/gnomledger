@@ -55,11 +55,11 @@ class Settings(BaseSettings):
     # payments will actually settle — until then, discovery works but payment
     # verification will fail closed (see dependencies.py).
     x402_enabled: bool = False
-    x402_facilitator_url: str | None = None
-    x402_pay_to_address: str | None = None  # wallet that receives payment, e.g. 0x3a74...
+    x402_facilitator_url: str | None = "https://x402-facilitator.coinbase.com"
+    x402_pay_to_address: str | None = "0xCC34553b4e6332ffb9C1b61E22436ACA53113D1d"  # wallet that receives payment, e.g. 0x3a74...
     x402_network: Literal["base", "base-sepolia"] = "base"
     x402_asset: str = "USDC"
-    x402_pool_account_id: int | None = None  # reserved account that holds anonymous pay-per-call agents; must be seeded via migration before x402 write endpoints work end-to-end
+    x402_pool_account_id: int | None = 99999999  # reserved account that holds anonymous pay-per-call agents; must be seeded via migration before x402 write endpoints work end-to-end
 
     @field_validator("environment")
     @classmethod

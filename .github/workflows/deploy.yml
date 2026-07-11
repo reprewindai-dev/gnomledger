@@ -1,0 +1,51 @@
+name: Deploy GnomLedger
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Coolify via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 5.78.135.11
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            echo "Deploying GnomLedger backend..."
+            cd /data/coolify/applications/gnomledger || (mkdir -p /data/coolify/applications/gnomledger && cd /data/coolify/applications/gnomledger && git clone https://github.com/reprewindai-dev/gnomledger.git .)
+            git pull origin main
+            docker build -t gnomledger-local:latest .
+            docker stop gnomledger-api || true
+            docker rm gnomledger-api || true
+            docker run -d \
+              --name gnomledger-api \
+              --network coolify \
+              --restart unless-stopped \
+              -p 8000:8000 \
+              gnomledger-local:latest
+            
+            # Setup Traefik route dynamically
+            cat > /data/coolify/proxy/dynamic/pgl.yaml << 'EOF'
+            http:
+              routers:
+                pgl:
+                  entryPoints:
+                    - http
+                    - https
+                  rule: "Host(`pgl.veklom.com`)"
+                  service: pgl
+                  tls:
+                    certResolver: letsencrypt
+              services:
+                pgl:
+                  loadBalancer:
+                    servers:
+                      - url: "http://gnomledger-api:8000"
+            EOF
+            echo "Deployment complete."

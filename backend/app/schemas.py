@@ -21,7 +21,7 @@ class GenomePayload(BaseModel):
     safety_rules: list[str] = Field(default_factory=list)
     runtime_config: dict[str, Any] = Field(default_factory=dict)
     intended_use: str = Field(min_length=1, max_length=255)
-    risk_category: Literal["low", "medium", "high"]
+    risk_category: Literal["low", "medium", "high", "critical"]
 
 
 class AgentCreateRequest(BaseModel):
@@ -66,6 +66,9 @@ class LedgerEventCreate(BaseModel):
         "deployment",
         "incident",
         "custom",
+        "birth",
+        "audit",
+        "genome_update",
     ]
     actor: str = Field(min_length=1, max_length=255)
     summary: str = Field(min_length=1, max_length=255)
