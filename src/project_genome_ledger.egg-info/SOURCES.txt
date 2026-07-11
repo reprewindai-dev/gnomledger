@@ -1,0 +1,8 @@
+LICENSE
+README.md
+pyproject.toml
+src/project_genome_ledger.egg-info/PKG-INFO
+src/project_genome_ledger.egg-info/SOURCES.txt
+src/project_genome_ledger.egg-info/dependency_links.txt
+src/project_genome_ledger.egg-info/requires.txt
+src/project_genome_ledger.egg-info/top_level.txt

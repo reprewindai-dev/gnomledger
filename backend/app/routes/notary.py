@@ -12,8 +12,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from ..dependencies import get_current_account
-from ..models import Account
+from ..dependencies import auth_context
+from ..schemas import PGLRequestContext
 
 router = APIRouter(prefix="/notary", tags=["notary"])
 
@@ -46,7 +46,7 @@ _ALLOWED_MODELS = {"gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"}
 @router.post("/chat", response_model=NotaryChatResponse)
 async def notary_chat(
     body: NotaryChatRequest,
-    account: Account = Depends(get_current_account),
+    ctx: PGLRequestContext = Depends(auth_context),
 ) -> NotaryChatResponse:
     """Send a message to the Notary Custodian AI (Gemini, server-side)."""
     api_key = os.environ.get("GEMINI_API_KEY")
