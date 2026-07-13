@@ -127,11 +127,15 @@ export interface ChatMessage {
 export interface NotaryChatRequest {
   message: string;
   agent_id?: string;
+  provider?: "ollama" | "openai_compatible" | "gemini";
   model?: string;
+  provider_api_key?: string;
+  provider_base_url?: string;
 }
 
 export interface NotaryChatResponse {
   reply: string;
+  provider: string;
   model_used: string;
   input_tokens: number;
   output_tokens: number;

@@ -18,7 +18,7 @@ def create_api_router() -> APIRouter:
     api_router.include_router(agents_router)
     api_router.include_router(billing_router)
     api_router.include_router(incidents_router)
-    api_router.include_router(integrations_router)
+    api_router.include_router(integrations_router, prefix="/integrations")
     api_router.include_router(ledger_router)
     api_router.include_router(lineage_router)
     api_router.include_router(notary_router)

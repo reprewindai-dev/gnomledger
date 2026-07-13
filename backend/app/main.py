@@ -1,18 +1,27 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .database import init_database
+from .database import check_database, init_database
 from .routes import create_api_router
 from .schemas import ErrorResponse, HealthResponse
 from .utils import utc_now
+
+
+logger = logging.getLogger(__name__)
+STATIC_DIST_DIR = Path(__file__).resolve().parents[2] / "dist"
+DATABASE_RETRY_SECONDS = 90
+DATABASE_RETRY_INTERVAL_SECONDS = 5
 
 
 def _configure_logging() -> None:
@@ -24,8 +33,38 @@ def _configure_logging() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_database()
-    yield
+    app.state.database_ready = False
+    app.state.database_error = "database initialization has not completed"
+
+    async def initialize_database_until_ready() -> None:
+        deadline = time.monotonic() + DATABASE_RETRY_SECONDS
+        while True:
+            try:
+                await asyncio.to_thread(init_database)
+                await asyncio.to_thread(check_database)
+                app.state.database_ready = True
+                app.state.database_error = None
+                logger.info("PGL database schema is ready")
+                return
+            except Exception as exc:  # pragma: no cover - exact DB driver errors vary by deployment
+                app.state.database_ready = False
+                app.state.database_error = str(exc)
+                if time.monotonic() >= deadline:
+                    logger.error("PGL database is unavailable after startup retry window: %s", exc)
+                    return
+                logger.warning("PGL database is not ready yet; retrying: %s", exc)
+                await asyncio.sleep(DATABASE_RETRY_INTERVAL_SECONDS)
+
+    database_task = asyncio.create_task(initialize_database_until_ready())
+    try:
+        yield
+    finally:
+        if not database_task.done():
+            database_task.cancel()
+            try:
+                await database_task
+            except asyncio.CancelledError:
+                pass
 
 
 def _build_app() -> FastAPI:
@@ -55,9 +94,34 @@ def _build_app() -> FastAPI:
             content=ErrorResponse(detail=str(exc)).model_dump(),
         )
 
+    @app.get("/health/live", tags=["health"], response_model=HealthResponse)
+    async def liveness_check():
+        return HealthResponse(status="ok", timestamp=utc_now())
+
     @app.get("/health", tags=["health"], response_model=HealthResponse)
     async def health_check():
-        return HealthResponse(status="ok", timestamp=utc_now())
+        if getattr(app.state, "database_ready", False):
+            return HealthResponse(status="ok", timestamp=utc_now(), database="ready")
+        return HealthResponse(
+            status="degraded",
+            timestamp=utc_now(),
+            database="unavailable",
+            detail=getattr(app.state, "database_error", "database unavailable"),
+        )
+
+    @app.get("/health/ready", tags=["health"], response_model=HealthResponse)
+    async def readiness_check():
+        if getattr(app.state, "database_ready", False):
+            return HealthResponse(status="ok", timestamp=utc_now(), database="ready")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=HealthResponse(
+                status="error",
+                timestamp=utc_now(),
+                database="unavailable",
+                detail=getattr(app.state, "database_error", "database unavailable"),
+            ).model_dump(mode="json"),
+        )
 
     @app.get("/.well-known/x402.json", tags=["discovery"])
     async def x402_discovery():
@@ -110,6 +174,23 @@ def _build_app() -> FastAPI:
                 "veklom_id": "https://veklom-id.vercel.app",
             },
         }
+
+    if (STATIC_DIST_DIR / "index.html").exists():
+        if (STATIC_DIST_DIR / "assets").exists():
+            app.mount("/assets", StaticFiles(directory=STATIC_DIST_DIR / "assets"), name="pgl-studio-assets")
+
+        @app.get("/", include_in_schema=False)
+        async def pgl_studio_index():
+            return FileResponse(STATIC_DIST_DIR / "index.html")
+
+        @app.get("/{path:path}", include_in_schema=False)
+        async def pgl_studio_fallback(path: str):
+            if path.startswith(("api/", "health", ".well-known/")):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+            requested_file = STATIC_DIST_DIR / path
+            if requested_file.is_file():
+                return FileResponse(requested_file)
+            return FileResponse(STATIC_DIST_DIR / "index.html")
 
     return app
 

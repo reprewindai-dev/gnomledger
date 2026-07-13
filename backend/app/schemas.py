@@ -131,6 +131,8 @@ class StripeWebhookPayload(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded", "error"]
     timestamp: datetime
+    database: Literal["ready", "initializing", "unavailable"] | None = None
+    detail: str | None = None
 
 
 class CertificateDownloadResponse(BaseModel):

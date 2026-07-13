@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
 
+from sqlalchemy import text
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -55,6 +56,11 @@ def ensure_schema() -> None:
 
 def init_database() -> None:
     ensure_schema()
+
+
+def check_database() -> None:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
 
 
 def reset_database_for_tests() -> None:

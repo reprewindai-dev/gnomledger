@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Fingerprint, RefreshCw, Copy, Check, ShieldCheck, AlertCircle } from "lucide-react";
 import type { AgentDetail, ExecutionIdentityV1, SessionState } from "../types";
 import { getExecutionIdentity } from "../api";

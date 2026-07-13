@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Table2, RefreshCw, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
 import type { AgentDetail, GoogleSheetsSyncConfig, GoogleSheetsSyncResult, SessionState } from "../types";
 import { googleSheetsSync } from "../api";

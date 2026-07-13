@@ -25,7 +25,10 @@ export default function NotaryChat({ agents, selectedAgent, session }: NotaryCha
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [selectedProvider, setSelectedProvider] = useState<"ollama" | "openai_compatible" | "gemini">("ollama");
+  const [selectedModel, setSelectedModel] = useState("llama3.1");
+  const [providerApiKey, setProviderApiKey] = useState("");
+  const [providerBaseUrl, setProviderBaseUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +55,10 @@ export default function NotaryChat({ agents, selectedAgent, session }: NotaryCha
       const payload: NotaryChatRequest = {
         message: trimmed,
         agent_id: selectedAgent?.agent_id,
+        provider: selectedProvider,
         model: selectedModel,
+        provider_api_key: providerApiKey.trim() || undefined,
+        provider_base_url: providerBaseUrl.trim() || undefined,
       };
       const result = await notaryChat(session, payload);
       const assistantMsg: ChatMessage = {
@@ -92,15 +98,63 @@ export default function NotaryChat({ agents, selectedAgent, session }: NotaryCha
         <div className="flex items-center gap-2">
           <Terminal className="size-3.5 text-white/40" />
           <select
+            value={selectedProvider}
+            onChange={e => {
+              const provider = e.target.value as "ollama" | "openai_compatible" | "gemini";
+              setSelectedProvider(provider);
+              setSelectedModel(provider === "ollama" ? "llama3.1" : provider === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini");
+            }}
+            className="bg-[#050505] border border-white/10 rounded px-2 py-1 text-[11px] font-mono text-white/70 outline-none cursor-pointer"
+          >
+            <option value="ollama">Ollama</option>
+            <option value="openai_compatible">BYOK</option>
+            <option value="gemini">Gemini BYOK</option>
+          </select>
+          <select
             value={selectedModel}
             onChange={e => setSelectedModel(e.target.value)}
             className="bg-[#050505] border border-white/10 rounded px-2 py-1 text-[11px] font-mono text-white/70 outline-none cursor-pointer"
           >
-            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+            {selectedProvider === "ollama" && (
+              <>
+                <option value="llama3.1">llama3.1</option>
+                <option value="llama3.2">llama3.2</option>
+                <option value="mistral">mistral</option>
+              </>
+            )}
+            {selectedProvider === "openai_compatible" && (
+              <>
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="claude-3-5-sonnet-latest">claude-3-5-sonnet-latest</option>
+              </>
+            )}
+            {selectedProvider === "gemini" && (
+              <>
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+              </>
+            )}
           </select>
         </div>
       </div>
+      {selectedProvider !== "ollama" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 px-5 py-3 border-b border-white/10 bg-white/[0.02]">
+          <input
+            type="password"
+            value={providerApiKey}
+            onChange={e => setProviderApiKey(e.target.value)}
+            placeholder="Customer provider key"
+            className="bg-[#050505] border border-white/10 rounded px-3 py-2 text-xs font-mono text-white outline-none focus:border-teal-500/50"
+          />
+          <input
+            value={providerBaseUrl}
+            onChange={e => setProviderBaseUrl(e.target.value)}
+            placeholder={selectedProvider === "gemini" ? "Gemini uses default endpoint" : "OpenAI-compatible base URL"}
+            className="bg-[#050505] border border-white/10 rounded px-3 py-2 text-xs font-mono text-white outline-none focus:border-teal-500/50"
+          />
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
