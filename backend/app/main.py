@@ -5,11 +5,9 @@ import logging
 import secrets
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .database import check_database, init_database
@@ -19,7 +17,6 @@ from .utils import utc_now
 
 
 logger = logging.getLogger(__name__)
-STATIC_DIST_DIR = Path(__file__).resolve().parents[2] / "dist"
 DATABASE_RETRY_SECONDS = 90
 DATABASE_RETRY_INTERVAL_SECONDS = 5
 
@@ -174,23 +171,6 @@ def _build_app() -> FastAPI:
                 "veklom_id": "https://veklom-id.vercel.app",
             },
         }
-
-    if (STATIC_DIST_DIR / "index.html").exists():
-        if (STATIC_DIST_DIR / "assets").exists():
-            app.mount("/assets", StaticFiles(directory=STATIC_DIST_DIR / "assets"), name="pgl-studio-assets")
-
-        @app.get("/", include_in_schema=False)
-        async def pgl_studio_index():
-            return FileResponse(STATIC_DIST_DIR / "index.html")
-
-        @app.get("/{path:path}", include_in_schema=False)
-        async def pgl_studio_fallback(path: str):
-            if path.startswith(("api/", "health", ".well-known/")):
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-            requested_file = STATIC_DIST_DIR / path
-            if requested_file.is_file():
-                return FileResponse(requested_file)
-            return FileResponse(STATIC_DIST_DIR / "index.html")
 
     return app
 
