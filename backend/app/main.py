@@ -64,9 +64,8 @@ def _build_app() -> FastAPI:
             content=ErrorResponse(detail=str(exc)).model_dump(),
         )
 
-    @app.get("/health", tags=["health"], response_model=HealthResponse)
-    async def health_check():
-        return HealthResponse(status="ok", timestamp=utc_now())
+    from .protocol import router as protocol_router
+    app.include_router(protocol_router)
 
 
 
