@@ -71,13 +71,13 @@ npm run dev
 6. Verify health:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8017/health
 ```
 
 7. Bootstrap the first account:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/admin/bootstrap \
+curl -X POST http://127.0.0.1:8017/api/v1/admin/bootstrap \
   -H "Content-Type: application/json" \
   -d '{"bootstrap_token":"dev-bootstrap-token","account_name":"Demo","admin_name":"admin@demo.com"}'
 ```
@@ -155,7 +155,7 @@ From the repository root:
 docker compose up --build
 ```
 
-This exposes the API on `http://localhost:8000`.
+This exposes the API on `http://localhost:8017`.
 
 ## Tests
 

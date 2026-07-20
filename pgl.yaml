@@ -12,4 +12,4 @@ http:
     pgl:
       loadBalancer:
         servers:
-          - url: "http://gnomledger-api:8000"
+          - url: "http://gnomledger-api:8017"

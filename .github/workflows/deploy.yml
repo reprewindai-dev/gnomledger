@@ -27,7 +27,8 @@ jobs:
               --name gnomledger-api \
               --network coolify \
               --restart unless-stopped \
-              -p 8000:8000 \
+              -p 8017:8017 \
+              -e DATABASE_URL="sqlite:///./data/pgl.sqlite3" \
               gnomledger-local:latest
             
             # Setup Traefik route dynamically
@@ -46,6 +47,6 @@ jobs:
                 pgl:
                   loadBalancer:
                     servers:
-                      - url: "http://gnomledger-api:8000"
+                      - url: "http://gnomledger-api:8017"
             EOF
             echo "Deployment complete."
