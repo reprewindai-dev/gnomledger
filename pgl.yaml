@@ -1,0 +1,15 @@
+http:
+  routers:
+    pgl:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`pgl.veklom.com`)"
+      service: pgl
+      tls:
+        certResolver: letsencrypt
+  services:
+    pgl:
+      loadBalancer:
+        servers:
+          - url: "http://gnomledger-api:8000"

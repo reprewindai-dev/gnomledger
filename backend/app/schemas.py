@@ -74,6 +74,8 @@ class LedgerEventCreate(BaseModel):
     summary: str = Field(min_length=1, max_length=255)
     details: dict[str, Any]
     idempotency_key: str | None = None
+    tier: int = 4
+    batch_id: str | None = None
 
 
 class LedgerEventResponse(BaseModel):
@@ -84,6 +86,8 @@ class LedgerEventResponse(BaseModel):
     details: dict[str, Any]
     prev_event_hash: str | None
     event_hash: str
+    tier: int
+    batch_id: str | None
     created_at: datetime
 
 
@@ -140,6 +144,7 @@ class CertificateDownloadResponse(BaseModel):
     certificate_id: str
     document_uri: str | None
     issued_at: datetime
+    tier: int = 1
 
 
 class ApiKeyCreateRequest(BaseModel):

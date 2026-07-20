@@ -10,6 +10,7 @@ from .. import models
 from ..schemas import LedgerEventCreate, LedgerEventResponse
 from ..utils import canonical_timestamp, short_id, stable_hash, utc_now
 from .analytics_service import AnalyticsService
+from .merkle_service import MerkleTree
 
 
 class LedgerService:
@@ -52,6 +53,8 @@ class LedgerService:
                     details=existing.details,
                     prev_event_hash=existing.prev_event_hash,
                     event_hash=existing.event_hash,
+                    tier=existing.tier,
+                    batch_id=existing.batch_id,
                     created_at=existing.created_at,
                 )
 
@@ -63,6 +66,8 @@ class LedgerService:
             summary=payload.summary,
             details=payload.details,
             prev_event_hash=prev_hash,
+            tier=payload.tier,
+            batch_id=payload.batch_id,
             created_at=utc_now(),
             idempotency_key=payload.idempotency_key,
             event_hash="",
@@ -76,6 +81,8 @@ class LedgerService:
                 "summary": event.summary,
                 "details": event.details,
                 "prev_event_hash": event.prev_event_hash,
+                "tier": event.tier,
+                "batch_id": event.batch_id,
                 "created_at": canonical_timestamp(event.created_at),
             }
         )
@@ -101,6 +108,8 @@ class LedgerService:
                         details=existing.details,
                         prev_event_hash=existing.prev_event_hash,
                         event_hash=existing.event_hash,
+                        tier=existing.tier,
+                        batch_id=existing.batch_id,
                         created_at=existing.created_at,
                     )
             raise
@@ -124,8 +133,45 @@ class LedgerService:
             details=event.details,
             prev_event_hash=event.prev_event_hash,
             event_hash=event.event_hash,
+            tier=event.tier,
+            batch_id=event.batch_id,
             created_at=event.created_at,
         )
+
+    def batch_events(self, agent_id: str, batch_id: str) -> LedgerEventResponse | None:
+        agent = self.db.execute(
+            select(models.Agent).where(models.Agent.agent_id == agent_id)
+        ).scalar_one_or_none()
+        if not agent:
+            raise ValueError("Unknown agent_id")
+            
+        unbatched = list(self.db.execute(
+            select(models.LedgerEvent)
+            .where(models.LedgerEvent.agent_id == agent.id, models.LedgerEvent.batch_id == None, models.LedgerEvent.tier == 4)
+            .order_by(models.LedgerEvent.id.asc())
+        ).scalars())
+        
+        if not unbatched:
+            return None
+            
+        leaves = [e.event_hash for e in unbatched]
+        tree = MerkleTree(leaves)
+        root_hash = tree.get_root()
+        
+        for e in unbatched:
+            e.batch_id = batch_id
+            
+        # Create the tier 3 anchor event
+        payload = LedgerEventCreate(
+            agent_id=agent_id,
+            event_type="batch_anchor",
+            actor="system",
+            summary=f"Merkle Batch Anchor for {len(unbatched)} events",
+            details={"merkle_root": root_hash, "leaf_count": len(unbatched)},
+            tier=3,
+            batch_id=batch_id
+        )
+        return self.log_event(payload)
 
     def get_agent_history(
         self,
@@ -157,6 +203,8 @@ class LedgerService:
                 details=e.details,
                 prev_event_hash=e.prev_event_hash,
                 event_hash=e.event_hash,
+                tier=e.tier,
+                batch_id=e.batch_id,
                 created_at=e.created_at,
             )
             for e in events
@@ -197,6 +245,8 @@ class LedgerService:
                     "summary": event.summary,
                     "details": event.details,
                     "prev_event_hash": previous,
+                    "tier": event.tier,
+                    "batch_id": event.batch_id,
                     "created_at": canonical_timestamp(event.created_at),
                 }
             )

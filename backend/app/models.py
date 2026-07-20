@@ -136,6 +136,7 @@ class BirthCertificate(Base):
     parent_agent_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     certificate_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    tier: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
     agent: Mapped[Agent] = relationship(back_populates="certificate")
 
@@ -153,6 +154,8 @@ class LedgerEvent(Base):
     prev_event_hash: Mapped[str | None] = mapped_column(String(128))
     event_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     idempotency_key: Mapped[str | None] = mapped_column(String(64), unique=True)
+    tier: Mapped[int] = mapped_column(Integer, default=4, server_default="4")
+    batch_id: Mapped[str | None] = mapped_column(String(36), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     agent: Mapped[Agent] = relationship(back_populates="ledger_events")
