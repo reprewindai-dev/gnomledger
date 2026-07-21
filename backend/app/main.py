@@ -53,9 +53,16 @@ async def lifespan(app: FastAPI):
                 await asyncio.sleep(DATABASE_RETRY_INTERVAL_SECONDS)
 
     database_task = asyncio.create_task(initialize_database_until_ready())
+    
+    from backend.app.services.capi_registration import register_with_capi
+    from backend.app.config import get_settings
+    capi_task = asyncio.create_task(register_with_capi(get_settings()))
+    
     try:
         yield
     finally:
+        if capi_task and not capi_task.done():
+            capi_task.cancel()
         if not database_task.done():
             database_task.cancel()
             try:

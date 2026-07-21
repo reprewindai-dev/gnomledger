@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     allow_anonymous_in_dev: bool = False
     cors_origins: list[str] = Field(default_factory=list)
 
+    # --- Universal USB (cAPI) Integration ---
+    capi_backend_url: str | None = "http://capi-container:3003"
+    capi_api_key: str | None = None
+
     frontend_origin: str | None = None
     certificate_storage_path: str = Field(default_factory=_default_certificate_storage_path)
     request_id_header: str = "x-request-id"
