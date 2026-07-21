@@ -85,12 +85,14 @@ class LedgerEventResponse(BaseModel):
 
 
 class LedgerChainVerifyRequest(BaseModel):
-    valid: bool
+    status: Literal["verified", "unmeasured", "blocked"]
+    valid: bool | None
     latest_event_hash: str | None
     checked_events: int
     first_event_at: datetime | None
     last_event_at: datetime | None
     errors: list[str] = Field(default_factory=list)
+    reason: str = Field(min_length=1, max_length=255)
 
 
 class LineageTreeNode(BaseModel):

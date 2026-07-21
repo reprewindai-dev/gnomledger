@@ -91,12 +91,14 @@ export function getAgentHistory(session: SessionState, agentId: string) {
 
 export function verifyAgentHistory(session: SessionState, agentId: string) {
   return request<{
-    valid: boolean;
+    status: "verified" | "unmeasured" | "blocked";
+    valid: boolean | null;
     latest_event_hash: string | null;
     checked_events: number;
     first_event_at: string | null;
     last_event_at: string | null;
     errors: string[];
+    reason: string;
   }>(`/ledger/agents/${agentId}/verify`, undefined, session);
 }
 

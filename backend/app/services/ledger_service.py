@@ -183,6 +183,21 @@ class LedgerService:
         first_event_at = None
         last_event_at = None
 
+        if not events:
+            return (
+                False,
+                {
+                    "status": "unmeasured",
+                    "valid": None,
+                    "checked_events": 0,
+                    "first_event_at": None,
+                    "last_event_at": None,
+                    "latest_event_hash": None,
+                    "errors": [],
+                    "reason": "No ledger events have been recorded for this agent.",
+                },
+            )
+
         for event in events:
             if first_event_at is None:
                 first_event_at = event.created_at
@@ -210,11 +225,13 @@ class LedgerService:
         return (
             len(errors) == 0,
             {
+                "status": "verified" if not errors else "blocked",
                 "valid": len(errors) == 0,
                 "checked_events": len(events),
                 "first_event_at": first_event_at,
                 "last_event_at": last_event_at,
                 "latest_event_hash": latest_hash,
                 "errors": errors,
+                "reason": "Ledger chain verified." if not errors else "Ledger chain verification failed.",
             },
         )

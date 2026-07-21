@@ -46,7 +46,7 @@ def verify_agent_chain(
 ) -> LedgerChainVerifyRequest:
     service = LedgerService(db)
     try:
-        valid, payload = service.verify_chain(agent_id)
+        _, payload = service.verify_chain(agent_id)
         return LedgerChainVerifyRequest(**payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -112,7 +112,8 @@ export default function App() {
   const [usage, setUsage] = useState<BillingUsage[]>([]);
   const [usageLimit, setUsageLimit] = useState<UsageLimit | null>(null);
   const [chainStatus, setChainStatus] = useState<{
-    valid: boolean;
+    status: "verified" | "unmeasured" | "blocked";
+    valid: boolean | null;
     checked_events: number;
   } | null>(null);
   const [busy, setBusy] = useState<string>("");
@@ -142,14 +143,14 @@ export default function App() {
       getAgentHistory(activeSession, selectedAgentId).then(setLedgerEvents),
       getLineageTree(activeSession, selectedAgentId).then(setLineage),
       verifyAgentHistory(activeSession, selectedAgentId).then((result) =>
-        setChainStatus({ valid: result.valid, checked_events: result.checked_events })
+        setChainStatus({ status: result.status, valid: result.valid, checked_events: result.checked_events })
       )
     ]).catch((error: Error) => {
       const demoLedger = demoBundle.ledgerByAgent[selectedAgentId] ?? [];
       const demoLineage = demoBundle.lineageByAgent[selectedAgentId] ?? null;
       setLedgerEvents(demoLedger);
       setLineage(demoLineage);
-      setChainStatus({ valid: true, checked_events: demoLedger.length });
+      setChainStatus({ status: "unmeasured", valid: null, checked_events: demoLedger.length });
       setMessage(session ? error.message : "Investor replay is loaded from the local ledger snapshot.");
     });
   }, [activeSession, selectedAgentId]);
@@ -553,7 +554,7 @@ export default function App() {
             <div className="panel-head">
               <span>Life ledger</span>
               <strong>
-                {chainStatus ? `${chainStatus.checked_events} events, ${chainStatus.valid ? "chain verified" : "chain failed"}` : "Awaiting agent"}
+                {chainStatus ? `${chainStatus.checked_events} events, ${chainStatus.status === "verified" ? "chain verified" : chainStatus.status === "blocked" ? "chain blocked" : "chain unmeasured"}` : "Awaiting agent"}
               </strong>
             </div>
             {ledgerEvents.length > 0 ? (
