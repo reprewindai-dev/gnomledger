@@ -57,6 +57,32 @@ def list_agents(
         latest = row.genome_versions[-1] if row.genome_versions else None
         if not cert or not latest:
             continue
+        # Calculate trust score
+        base_score = 50.0
+        events = row.ledger_events
+        evidence_head = events[-1].event_hash if events else None
+        
+        for event in events:
+            if event.event_type == "birth_registration":
+                base_score = max(base_score, 50.0)
+            elif event.event_type == "deployment":
+                base_score += 10.0
+            elif event.event_type == "test_audit":
+                base_score += event.details.get("score", 0) / 10.0
+            elif event.event_type == "violation":
+                base_score -= 20.0
+                
+        base_score = max(0.0, min(100.0, base_score))
+        
+        if base_score >= 90:
+            risk_tier = "production"
+        elif base_score >= 70:
+            risk_tier = "standard"
+        elif base_score >= 40:
+            risk_tier = "sandbox"
+        else:
+            risk_tier = "terminated"
+
         result.append(
             AgentDetailResponse(
                 agent_id=row.agent_id,
@@ -66,6 +92,9 @@ def list_agents(
                 jurisdiction=row.jurisdiction,
                 declared_purpose=row.declared_purpose,
                 status=row.status,
+                trust_score=base_score,
+                risk_tier=risk_tier,
+                evidence_head=evidence_head,
                 genome=GenomePayload(**latest.payload),
                 parent_agent_ids=cert.parent_agent_ids,
                 created_at=row.created_at,
@@ -102,6 +131,32 @@ def get_agent(
     if not cert:
         raise HTTPException(status_code=500, detail="Agent certificate missing")
 
+    # Calculate trust score
+    base_score = 50.0
+    events = agent.ledger_events
+    evidence_head = events[-1].event_hash if events else None
+    
+    for event in events:
+        if event.event_type == "birth_registration":
+            base_score = max(base_score, 50.0)
+        elif event.event_type == "deployment":
+            base_score += 10.0
+        elif event.event_type == "test_audit":
+            base_score += event.details.get("score", 0) / 10.0
+        elif event.event_type == "violation":
+            base_score -= 20.0
+            
+    base_score = max(0.0, min(100.0, base_score))
+    
+    if base_score >= 90:
+        risk_tier = "production"
+    elif base_score >= 70:
+        risk_tier = "standard"
+    elif base_score >= 40:
+        risk_tier = "sandbox"
+    else:
+        risk_tier = "terminated"
+
     return AgentDetailResponse(
         agent_id=agent.agent_id,
         certificate_id=cert.certificate_id,
@@ -110,6 +165,9 @@ def get_agent(
         jurisdiction=agent.jurisdiction,
         declared_purpose=agent.declared_purpose,
         status=agent.status,
+        trust_score=base_score,
+        risk_tier=risk_tier,
+        evidence_head=evidence_head,
         genome=GenomePayload(**latest.payload),
         parent_agent_ids=cert.parent_agent_ids,
         created_at=agent.created_at,

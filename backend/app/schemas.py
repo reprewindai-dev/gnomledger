@@ -40,6 +40,9 @@ class AgentResponse(BaseModel):
     jurisdiction: str
     declared_purpose: str
     status: str
+    trust_score: float
+    risk_tier: str
+    evidence_head: str | None
     genome: GenomePayload
     parent_agent_ids: list[str]
     created_at: datetime
@@ -65,6 +68,9 @@ class LedgerEventCreate(BaseModel):
         "test_audit",
         "deployment",
         "incident",
+        "violation",
+        "pre_execution_authorization",
+        "post_execution_attestation",
         "custom",
     ]
     actor: str = Field(min_length=1, max_length=255)

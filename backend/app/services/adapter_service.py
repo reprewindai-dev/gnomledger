@@ -55,6 +55,32 @@ class AdapterService:
         if certificate is None:
             raise ValueError("Certificate not found")
 
+        # Calculate trust score
+        base_score = 50.0
+        events = agent.ledger_events
+        evidence_head = events[-1].event_hash if events else None
+        
+        for event in events:
+            if event.event_type == "birth_registration":
+                base_score = max(base_score, 50.0)
+            elif event.event_type == "deployment":
+                base_score += 10.0
+            elif event.event_type == "test_audit":
+                base_score += event.details.get("score", 0) / 10.0
+            elif event.event_type == "violation":
+                base_score -= 20.0
+                
+        base_score = max(0.0, min(100.0, base_score))
+        
+        if base_score >= 90:
+            risk_tier = "production"
+        elif base_score >= 70:
+            risk_tier = "standard"
+        elif base_score >= 40:
+            risk_tier = "sandbox"
+        else:
+            risk_tier = "terminated"
+
         agent_detail = AgentDetailResponse(
             agent_id=agent.agent_id,
             certificate_id=certificate.certificate_id,
@@ -63,6 +89,9 @@ class AdapterService:
             jurisdiction=agent.jurisdiction,
             declared_purpose=agent.declared_purpose,
             status=agent.status,
+            trust_score=base_score,
+            risk_tier=risk_tier,
+            evidence_head=evidence_head,
             genome=GenomePayload(**latest.payload),
             parent_agent_ids=certificate.parent_agent_ids,
             created_at=agent.created_at,
