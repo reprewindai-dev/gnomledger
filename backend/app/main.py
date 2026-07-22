@@ -146,6 +146,11 @@ def _build_app() -> FastAPI:
         return {
             "x402_version": 2,
             "provider": "GnomLedger — Programmable Governance Layer",
+            "facilitator_url": "https://x402.org/facilitator",
+            "rate_limit_policy": {
+                "free_trials_per_tenant": 5,
+                "behavior": "instant_paywall"
+            },
             "network": "eip155:8453",
             "payTo": "0xCC34553b4e6332ffb9C1b61E22436ACA53113D1d",
             "currency": "USDC",
