@@ -139,6 +139,21 @@ class CertificateService:
         self.db.flush()
         self.billing_service.record_usage(account.id, "certificate_issuance", 1.0)
 
+        # Recalculate trust snapshot and save to DB in same transaction
+        from .trust_policy import TrustPolicyV1
+        trust_data = TrustPolicyV1.calculate_trust([ledger_event])
+        
+        snapshot = models.AgentTrustSnapshot(
+            agent_id=agent.id,
+            trust_score=trust_data["trust_score"],
+            risk_tier=trust_data["risk_tier"],
+            trust_policy_version=trust_data["trust_policy_version"],
+            evidence_head=trust_data["evidence_head"],
+            calculated_at=utc_now()
+        )
+        self.db.add(snapshot)
+        agent.trust_snapshot = snapshot
+
         self.db.commit()
         self.db.refresh(agent)
         self.db.refresh(certificate)
@@ -170,9 +185,10 @@ class CertificateService:
             jurisdiction=agent.jurisdiction,
             declared_purpose=agent.declared_purpose,
             status=agent.status,
-            trust_score=50.0,
-            risk_tier="sandbox",
-            evidence_head=None,
+            trust_score=snapshot.trust_score,
+            risk_tier=snapshot.risk_tier,
+            trust_policy_version=snapshot.trust_policy_version,
+            evidence_head=snapshot.evidence_head,
             genome=payload.genome,
             parent_agent_ids=payload.parent_agent_ids,
             created_at=agent.created_at,

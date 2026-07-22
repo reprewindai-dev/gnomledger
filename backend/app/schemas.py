@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PGLRequestContext(BaseModel):
@@ -32,6 +32,36 @@ class AgentCreateRequest(BaseModel):
     parent_agent_ids: list[str] = Field(default_factory=list)
 
 
+class PreExecutionAuthorizationDetails(BaseModel):
+    schema_version: Literal["pgl.pre_execution_authorization.v1"]
+    run_id: str
+    workspace_id: str
+    agent_id: str
+    genome_hash: str
+    constitution_hash: str
+    plan_hash: str
+    input_hash: str | None
+    decision_frame_hash: str | None
+    governance_decision: str
+    risk_tier: str
+    approved_budget_cents: int
+    reserve_cents: int
+    actor_id: str | None
+    provenance: dict[str, Any]
+
+
+class PostExecutionAttestationDetails(BaseModel):
+    schema_version: Literal["pgl.post_execution_attestation.v1"]
+    run_id: str
+    agent_id: str
+    pre_authorization_event_id: str
+    output_hash: str
+    outcome_hash: str
+    governance_decision: str
+    actor_id: str | None
+    provenance: dict[str, Any]
+
+
 class AgentResponse(BaseModel):
     agent_id: str
     certificate_id: str
@@ -42,6 +72,7 @@ class AgentResponse(BaseModel):
     status: str
     trust_score: float
     risk_tier: str
+    trust_policy_version: str = "v1"
     evidence_head: str | None
     genome: GenomePayload
     parent_agent_ids: list[str]
@@ -59,6 +90,9 @@ class GenomeUpdateRequest(BaseModel):
     changes: GenomePayload
     note: str = "Genome update"
 
+
+from typing import Annotated
+from pydantic import model_validator
 
 class LedgerEventCreate(BaseModel):
     agent_id: str = Field(min_length=1, max_length=36)
@@ -78,6 +112,14 @@ class LedgerEventCreate(BaseModel):
     details: dict[str, Any]
     idempotency_key: str | None = None
 
+    @model_validator(mode="after")
+    def validate_execution_details(self) -> LedgerEventCreate:
+        if self.event_type == "pre_execution_authorization":
+            PreExecutionAuthorizationDetails(**self.details)
+        elif self.event_type == "post_execution_attestation":
+            PostExecutionAttestationDetails(**self.details)
+        return self
+
 
 class LedgerEventResponse(BaseModel):
     event_id: str
@@ -88,6 +130,9 @@ class LedgerEventResponse(BaseModel):
     prev_event_hash: str | None
     event_hash: str
     created_at: datetime
+    persisted: bool = True
+    idempotent_replay: bool = False
+    chain_head: str | None = None
 
 
 class LedgerChainVerifyRequest(BaseModel):
@@ -214,3 +259,20 @@ class VeklmAdapterSnapshot(BaseModel):
     lineage: LineageTreeNode
     usage_limits: list[AdapterUsageLimitResponse]
     snapshot_hash: str
+
+
+class ExecutionValidateRequest(BaseModel):
+    agent_id: str
+    workspace_id: str
+    requested_tools: list[str]
+    expected_genome_hash: str
+
+
+class ExecutionValidateResponse(BaseModel):
+    allowed: bool
+    agent_certificate_id: str | None
+    canonical_genome_hash: str | None
+    trust_score: float
+    risk_tier: str
+    trust_policy_version: str
+    evidence_head: str | None

@@ -89,12 +89,15 @@ class Agent(Base):
     jurisdiction: Mapped[str] = mapped_column(String(64), nullable=False)
     declared_purpose: Mapped[str] = mapped_column(String(512), nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="registered")
+    workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     account: Mapped[Account] = relationship(back_populates="agents")
     genome_versions: Mapped[list["GenomeVersion"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     certificate: Mapped["BirthCertificate"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")
+    trust_snapshot: Mapped["AgentTrustSnapshot"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")
     ledger_events: Mapped[list["LedgerEvent"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     parent_edges: Mapped[list["LineageEdge"]] = relationship(
         back_populates="child", foreign_keys="LineageEdge.child_agent_id", cascade="all, delete-orphan"
@@ -152,10 +155,14 @@ class LedgerEvent(Base):
     details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     prev_event_hash: Mapped[str | None] = mapped_column(String(128))
     event_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    idempotency_key: Mapped[str | None] = mapped_column(String(64), unique=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     agent: Mapped[Agent] = relationship(back_populates="ledger_events")
+
+    __table_args__ = (
+        UniqueConstraint("agent_id", "idempotency_key", name="uq_ledger_idempotency"),
+    )
 
 
 class LineageEdge(Base):
@@ -265,3 +272,17 @@ class AuditReminder(Base):
     __table_args__ = (
         CheckConstraint("frequency IN ('once','daily','weekly','monthly')", name="ck_reminder_frequency"),
     )
+
+
+class AgentTrustSnapshot(Base):
+    __tablename__ = "agent_trust_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"), unique=True, nullable=False)
+    trust_score: Mapped[float] = mapped_column(default=50.0)
+    risk_tier: Mapped[str] = mapped_column(String(32), default="sandbox")
+    trust_policy_version: Mapped[str] = mapped_column(String(16), default="v1")
+    evidence_head: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    agent: Mapped[Agent] = relationship(back_populates="trust_snapshot")

@@ -77,6 +77,23 @@ class LineageService:
         edge = models.LineageEdge(parent_agent_id=source.id, child_agent_id=new_agent.id)
 
         self.db.add_all([new_genome, certificate, edge])
+
+        # Recalculate trust snapshot and save to DB in same transaction
+        from .trust_policy import TrustPolicyV1
+        from ..utils import utc_now
+        trust_data = TrustPolicyV1.calculate_trust([])
+        
+        snapshot = models.AgentTrustSnapshot(
+            agent_id=new_agent.id,
+            trust_score=trust_data["trust_score"],
+            risk_tier=trust_data["risk_tier"],
+            trust_policy_version=trust_data["trust_policy_version"],
+            evidence_head=trust_data["evidence_head"],
+            calculated_at=utc_now()
+        )
+        self.db.add(snapshot)
+        new_agent.trust_snapshot = snapshot
+
         self.db.commit()
         self.db.refresh(new_agent)
 
@@ -89,9 +106,10 @@ class LineageService:
             jurisdiction=new_agent.jurisdiction,
             declared_purpose=new_agent.declared_purpose,
             status=new_agent.status,
-            trust_score=50.0,
-            risk_tier="sandbox",
-            evidence_head=None,
+            trust_score=snapshot.trust_score,
+            risk_tier=snapshot.risk_tier,
+            trust_policy_version=snapshot.trust_policy_version,
+            evidence_head=snapshot.evidence_head,
             genome=genome_payload,
             parent_agent_ids=[source.agent_id],
             created_at=new_agent.created_at,

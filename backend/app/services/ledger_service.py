@@ -53,6 +53,9 @@ class LedgerService:
                     prev_event_hash=existing.prev_event_hash,
                     event_hash=existing.event_hash,
                     created_at=existing.created_at,
+                    persisted=True,
+                    idempotent_replay=True,
+                    chain_head=existing.event_hash,
                 )
 
         event = models.LedgerEvent(
@@ -80,6 +83,27 @@ class LedgerService:
             }
         )
         self.db.add(event)
+
+        # Recalculate trust snapshot and save to DB in same transaction
+        from .trust_policy import TrustPolicyV1
+        all_events = list(agent.ledger_events)
+        if event not in all_events:
+            all_events.append(event)
+
+        trust_data = TrustPolicyV1.calculate_trust(all_events)
+        
+        snapshot = agent.trust_snapshot
+        if not snapshot:
+            snapshot = models.AgentTrustSnapshot(agent_id=agent.id)
+            self.db.add(snapshot)
+            agent.trust_snapshot = snapshot
+        
+        snapshot.trust_score = trust_data["trust_score"]
+        snapshot.risk_tier = trust_data["risk_tier"]
+        snapshot.trust_policy_version = trust_data["trust_policy_version"]
+        snapshot.evidence_head = trust_data["evidence_head"]
+        snapshot.calculated_at = utc_now()
+
         try:
             self.db.commit()
         except IntegrityError:
@@ -102,6 +126,9 @@ class LedgerService:
                         prev_event_hash=existing.prev_event_hash,
                         event_hash=existing.event_hash,
                         created_at=existing.created_at,
+                        persisted=True,
+                        idempotent_replay=True,
+                        chain_head=existing.event_hash,
                     )
             raise
         self.db.refresh(event)
@@ -125,6 +152,9 @@ class LedgerService:
             prev_event_hash=event.prev_event_hash,
             event_hash=event.event_hash,
             created_at=event.created_at,
+            persisted=True,
+            idempotent_replay=False,
+            chain_head=event.event_hash,
         )
 
     def get_agent_history(
