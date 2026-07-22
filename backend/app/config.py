@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=list)
 
     # --- Universal USB (cAPI) Integration ---
-    capi_backend_url: str | None = "http://capi-container:3003"
+    capi_backend_url: str | None = "http://capi-container:3002"
     capi_api_key: str | None = None
 
     frontend_origin: str | None = None
