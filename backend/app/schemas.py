@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PGLRequestContext(BaseModel):
@@ -21,7 +21,7 @@ class GenomePayload(BaseModel):
     safety_rules: list[str] = Field(default_factory=list)
     runtime_config: dict[str, Any] = Field(default_factory=dict)
     intended_use: str = Field(min_length=1, max_length=255)
-    risk_category: Literal["low", "medium", "high"]
+    risk_category: Literal["low", "medium", "high", "critical"]
 
 
 class AgentCreateRequest(BaseModel):
@@ -92,7 +92,6 @@ class GenomeUpdateRequest(BaseModel):
 
 
 from typing import Annotated
-from pydantic import model_validator
 
 class LedgerEventCreate(BaseModel):
     agent_id: str = Field(min_length=1, max_length=36)
@@ -106,11 +105,16 @@ class LedgerEventCreate(BaseModel):
         "pre_execution_authorization",
         "post_execution_attestation",
         "custom",
+        "birth",
+        "audit",
+        "genome_update",
     ]
     actor: str = Field(min_length=1, max_length=255)
     summary: str = Field(min_length=1, max_length=255)
     details: dict[str, Any]
     idempotency_key: str | None = None
+    tier: int = 4
+    batch_id: str | None = None
 
     @model_validator(mode="after")
     def validate_execution_details(self) -> LedgerEventCreate:
@@ -129,6 +133,8 @@ class LedgerEventResponse(BaseModel):
     details: dict[str, Any]
     prev_event_hash: str | None
     event_hash: str
+    tier: int
+    batch_id: str | None
     created_at: datetime
     persisted: bool = True
     idempotent_replay: bool = False
@@ -192,6 +198,7 @@ class CertificateDownloadResponse(BaseModel):
     certificate_id: str
     document_uri: str | None
     issued_at: datetime
+    tier: int = 1
 
 
 class ApiKeyCreateRequest(BaseModel):
@@ -225,7 +232,7 @@ class ApiKeyListItem(BaseModel):
 class BootstrapRequest(BaseModel):
     bootstrap_token: str = Field(min_length=1)
     account_name: str = Field(min_length=1, max_length=255)
-    account_tier: Literal["launch", "scale", "enterprise"] = "launch"
+    account_tier: Literal["free", "launch", "scale", "enterprise"] = "free"
     admin_name: str = Field(default="genome-ledger-admin", max_length=255)
 
 
@@ -276,3 +283,57 @@ class ExecutionValidateResponse(BaseModel):
     risk_tier: str
     trust_policy_version: str
     evidence_head: str | None
+
+
+class IncidentCreate(BaseModel):
+    agent_id: str
+    severity: Literal["low", "medium", "high", "critical"]
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=1)
+    reporter: str = Field(min_length=1, max_length=255)
+
+
+class IncidentResponse(BaseModel):
+    incident_id: str
+    agent_id: str
+    severity: Literal["low", "medium", "high", "critical"]
+    status: Literal["open", "investigating", "resolved", "closed"]
+    title: str
+    description: str
+    reporter: str
+    resolution_notes: str | None
+    created_at: datetime
+    resolved_at: datetime | None
+
+
+class IncidentUpdate(BaseModel):
+    status: Literal["open", "investigating", "resolved", "closed"] | None = None
+    resolution_notes: str | None = None
+
+
+class AuditReminderCreate(BaseModel):
+    agent_id: str
+    title: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1)
+    frequency: Literal["once", "daily", "weekly", "monthly"]
+    next_trigger_at: datetime
+
+
+class AuditReminderResponse(BaseModel):
+    reminder_id: str
+    agent_id: str
+    title: str
+    message: str
+    frequency: Literal["once", "daily", "weekly", "monthly"]
+    next_trigger_at: datetime
+    last_triggered_at: datetime | None
+    is_active: bool
+    created_at: datetime
+
+
+class AuditReminderUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    message: str | None = Field(default=None, min_length=1)
+    frequency: Literal["once", "daily", "weekly", "monthly"] | None = None
+    next_trigger_at: datetime | None = None
+    is_active: bool | None = None

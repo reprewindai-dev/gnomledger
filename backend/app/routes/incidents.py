@@ -1,162 +1,176 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..dependencies import auth_context, get_db
-from ..schemas import PGLRequestContext
-from ..services import incident_service
+from ..dependencies import get_db, require_role
+from ..schemas import IncidentCreate, IncidentResponse, IncidentUpdate
+from ..services.incident_service import IncidentService
 
-router = APIRouter(prefix="/agents/{agent_id}/incidents", tags=["incidents"])
+router = APIRouter(tags=["incidents"])
 
 
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
-class IncidentCreate(BaseModel):
+class LegacyIncidentCreate(BaseModel):
     severity: Literal["low", "medium", "high", "critical"]
-    title: str = Field(..., min_length=1, max_length=255)
-    description: str = Field(..., min_length=1)
-    reporter: str = Field(..., min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=1)
+    reporter: str = Field(min_length=1, max_length=255)
 
 
-class IncidentUpdate(BaseModel):
-    status: Literal["open", "investigating", "resolved", "closed"] | None = None
-    resolution_notes: str | None = None
+def _create_payload(agent_id: str, body: LegacyIncidentCreate) -> IncidentCreate:
+    return IncidentCreate(agent_id=agent_id, **body.model_dump())
 
 
-class IncidentOut(BaseModel):
-    incident_id: str
-    agent_id: str
-    severity: str
-    status: str
-    title: str
-    description: str
-    reporter: str
-    resolution_notes: str | None
-    created_at: datetime
-    resolved_at: datetime | None
-
-    model_config = {"from_attributes": True}
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
-@router.post(
-    "",
-    response_model=IncidentOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create incident",
-)
-def create_incident(
-    agent_id: str,
-    body: IncidentCreate,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    record = incident_service.create_incident(
-        db,
-        agent_id,
-        severity=body.severity,
-        title=body.title,
-        description=body.description,
-        reporter=body.reporter,
-    )
-    return _serialize(record, agent_id)
-
-
-@router.get(
-    "",
-    response_model=list[IncidentOut],
-    summary="List incidents for agent",
-)
+@router.get("/incidents/", response_model=list[IncidentResponse])
 def list_incidents(
-    agent_id: str,
-    status_filter: str | None = Query(None, alias="status"),
-    severity: str | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    agent_id: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    severity: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    records = incident_service.list_incidents(
-        db, agent_id, status=status_filter, severity=severity, limit=limit, offset=offset
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> list[IncidentResponse]:
+    return IncidentService(db).list_incidents(
+        agent_id=agent_id,
+        status=status_filter,
+        severity=severity,
+        limit=limit,
+        offset=offset,
+        account_id=ctx.account_id,
     )
-    return [_serialize(r, agent_id) for r in records]
 
 
-@router.get(
-    "/{incident_id}",
-    response_model=IncidentOut,
-    summary="Get single incident",
-)
+@router.post("/incidents/", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
+def create_incident(
+    payload: IncidentCreate,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> IncidentResponse:
+    try:
+        return IncidentService(db).create_incident(payload, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/incidents/{incident_id}", response_model=IncidentResponse)
 def get_incident(
-    agent_id: str,
     incident_id: str,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    record = incident_service.get_incident(db, agent_id, incident_id)
-    return _serialize(record, agent_id)
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> IncidentResponse:
+    try:
+        return IncidentService(db).get_incident(incident_id, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.patch(
-    "/{incident_id}",
-    response_model=IncidentOut,
-    summary="Update incident status / resolution",
-)
+@router.patch("/incidents/{incident_id}", response_model=IncidentResponse)
 def update_incident(
-    agent_id: str,
     incident_id: str,
-    body: IncidentUpdate,
+    payload: IncidentUpdate,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    record = incident_service.update_incident(
-        db,
-        agent_id,
-        incident_id,
-        status=body.status,
-        resolution_notes=body.resolution_notes,
-    )
-    return _serialize(record, agent_id)
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> IncidentResponse:
+    try:
+        return IncidentService(db).update_incident(
+            incident_id, payload, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.delete(
-    "/{incident_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete incident",
-)
+@router.delete("/incidents/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_incident(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> None:
+    try:
+        IncidentService(db).delete_incident(incident_id, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/agents/{agent_id}/incidents", response_model=list[IncidentResponse])
+def list_agent_incidents(
+    agent_id: str,
+    status_filter: str | None = Query(default=None, alias="status"),
+    severity: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> list[IncidentResponse]:
+    return IncidentService(db).list_incidents(
+        agent_id=agent_id,
+        status=status_filter,
+        severity=severity,
+        limit=limit,
+        offset=offset,
+        account_id=ctx.account_id,
+    )
+
+
+@router.post("/agents/{agent_id}/incidents", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
+def create_agent_incident(
+    agent_id: str,
+    payload: LegacyIncidentCreate,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> IncidentResponse:
+    try:
+        return IncidentService(db).create_incident(
+            _create_payload(agent_id, payload), account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/agents/{agent_id}/incidents/{incident_id}", response_model=IncidentResponse)
+def get_agent_incident(
     agent_id: str,
     incident_id: str,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    incident_service.delete_incident(db, agent_id, incident_id)
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> IncidentResponse:
+    try:
+        return IncidentService(db).get_incident(
+            incident_id, agent_id=agent_id, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+@router.patch("/agents/{agent_id}/incidents/{incident_id}", response_model=IncidentResponse)
+def update_agent_incident(
+    agent_id: str,
+    incident_id: str,
+    payload: IncidentUpdate,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> IncidentResponse:
+    try:
+        return IncidentService(db).update_incident(
+            incident_id, payload, agent_id=agent_id, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-def _serialize(record, agent_id: str) -> dict:
-    return {
-        "incident_id": record.incident_id,
-        "agent_id": agent_id,
-        "severity": record.severity,
-        "status": record.status,
-        "title": record.title,
-        "description": record.description,
-        "reporter": record.reporter,
-        "resolution_notes": record.resolution_notes,
-        "created_at": record.created_at,
-        "resolved_at": record.resolved_at,
-    }
+
+@router.delete("/agents/{agent_id}/incidents/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agent_incident(
+    agent_id: str,
+    incident_id: str,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> None:
+    try:
+        IncidentService(db).delete_incident(
+            incident_id, agent_id=agent_id, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

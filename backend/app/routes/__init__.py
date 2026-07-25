@@ -9,6 +9,8 @@ from .ledger import router as ledger_router
 from .lineage import router as lineage_router
 from .notary import router as notary_router
 from .reminders import router as reminders_router
+from .mcp import router as mcp_router
+from .capi import router as capi_router
 
 
 def create_api_router() -> APIRouter:
@@ -23,6 +25,8 @@ def create_api_router() -> APIRouter:
     api_router.include_router(lineage_router)
     api_router.include_router(notary_router)
     api_router.include_router(reminders_router)
+    api_router.include_router(mcp_router)
+    api_router.include_router(capi_router)
     return api_router
 
 

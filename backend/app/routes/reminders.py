@@ -3,178 +3,202 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..dependencies import auth_context, get_db
-from ..schemas import PGLRequestContext
-from ..services import reminder_service
+from ..dependencies import get_db, require_role
+from ..schemas import AuditReminderCreate, AuditReminderResponse, AuditReminderUpdate
+from ..services.reminder_service import ReminderService
 
-router = APIRouter(prefix="/agents/{agent_id}/reminders", tags=["reminders"])
+router = APIRouter(tags=["reminders"])
 
 
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
-class ReminderCreate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=255)
-    message: str = Field(..., min_length=1)
+class LegacyReminderCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1)
     frequency: Literal["once", "daily", "weekly", "monthly"]
     next_trigger_at: datetime
 
 
-class ReminderUpdate(BaseModel):
-    title: str | None = None
-    message: str | None = None
-    frequency: Literal["once", "daily", "weekly", "monthly"] | None = None
-    next_trigger_at: datetime | None = None
-    is_active: bool | None = None
+def _create_payload(agent_id: str, body: LegacyReminderCreate) -> AuditReminderCreate:
+    return AuditReminderCreate(agent_id=agent_id, **body.model_dump())
 
 
-class ReminderOut(BaseModel):
-    reminder_id: str
-    agent_id: str
-    title: str
-    message: str
-    frequency: str
-    next_trigger_at: datetime
-    last_triggered_at: datetime | None
-    is_active: bool
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
-@router.post(
-    "",
-    response_model=ReminderOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create audit reminder",
-)
-def create_reminder(
-    agent_id: str,
-    body: ReminderCreate,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    reminder = reminder_service.create_reminder(
-        db,
-        agent_id,
-        title=body.title,
-        message=body.message,
-        frequency=body.frequency,
-        next_trigger_at=body.next_trigger_at,
+def _update_payload(
+    title: str | None,
+    message: str | None,
+    frequency: Literal["once", "daily", "weekly", "monthly"] | None,
+    next_trigger_at: datetime | None,
+    is_active: bool | None,
+) -> AuditReminderUpdate:
+    return AuditReminderUpdate(
+        title=title,
+        message=message,
+        frequency=frequency,
+        next_trigger_at=next_trigger_at,
+        is_active=is_active,
     )
-    return _serialize(reminder, agent_id)
 
 
-@router.get(
-    "",
-    response_model=list[ReminderOut],
-    summary="List reminders for agent",
-)
+@router.get("/reminders/", response_model=list[AuditReminderResponse])
 def list_reminders(
-    agent_id: str,
-    active_only: bool = Query(False),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    agent_id: str | None = Query(default=None),
+    active_only: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    reminders = reminder_service.list_reminders(
-        db, agent_id, active_only=active_only, limit=limit, offset=offset
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> list[AuditReminderResponse]:
+    return ReminderService(db).list_reminders(
+        agent_id=agent_id,
+        active_only=active_only,
+        limit=limit,
+        offset=offset,
+        account_id=ctx.account_id,
     )
-    return [_serialize(r, agent_id) for r in reminders]
 
 
-@router.get(
-    "/{reminder_id}",
-    response_model=ReminderOut,
-    summary="Get single reminder",
-)
+@router.post("/reminders/", response_model=AuditReminderResponse, status_code=status.HTTP_201_CREATED)
+def create_reminder(
+    payload: AuditReminderCreate,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> AuditReminderResponse:
+    try:
+        return ReminderService(db).create_reminder(payload, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/reminders/{reminder_id}", response_model=AuditReminderResponse)
 def get_reminder(
-    agent_id: str,
     reminder_id: str,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    reminder = reminder_service.get_reminder(db, agent_id, reminder_id)
-    return _serialize(reminder, agent_id)
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> AuditReminderResponse:
+    try:
+        return ReminderService(db).get_reminder(reminder_id, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.patch(
-    "/{reminder_id}",
-    response_model=ReminderOut,
-    summary="Update reminder",
-)
+@router.patch("/reminders/{reminder_id}", response_model=AuditReminderResponse)
 def update_reminder(
-    agent_id: str,
     reminder_id: str,
-    body: ReminderUpdate,
+    payload: AuditReminderUpdate,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    reminder = reminder_service.update_reminder(
-        db,
-        agent_id,
-        reminder_id,
-        title=body.title,
-        message=body.message,
-        frequency=body.frequency,
-        next_trigger_at=body.next_trigger_at,
-        is_active=body.is_active,
-    )
-    return _serialize(reminder, agent_id)
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> AuditReminderResponse:
+    try:
+        return ReminderService(db).update_reminder(
+            reminder_id, payload=payload, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.post(
-    "/{reminder_id}/trigger",
-    response_model=ReminderOut,
-    summary="Manually trigger a reminder",
-)
-def trigger_reminder(
-    agent_id: str,
-    reminder_id: str,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    reminder = reminder_service.trigger_reminder(db, agent_id, reminder_id)
-    return _serialize(reminder, agent_id)
-
-
-@router.delete(
-    "/{reminder_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete reminder",
-)
+@router.delete("/reminders/{reminder_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_reminder(
+    reminder_id: str,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> None:
+    try:
+        ReminderService(db).delete_reminder(reminder_id, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/reminders/{reminder_id}/trigger", response_model=AuditReminderResponse)
+def trigger_reminder(
+    reminder_id: str,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> AuditReminderResponse:
+    try:
+        return ReminderService(db).trigger_reminder(reminder_id, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/agents/{agent_id}/reminders", response_model=list[AuditReminderResponse])
+def list_agent_reminders(
+    agent_id: str,
+    active_only: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> list[AuditReminderResponse]:
+    return ReminderService(db).list_reminders(
+        agent_id=agent_id,
+        active_only=active_only,
+        limit=limit,
+        offset=offset,
+        account_id=ctx.account_id,
+    )
+
+
+@router.post("/agents/{agent_id}/reminders", response_model=AuditReminderResponse, status_code=status.HTTP_201_CREATED)
+def create_agent_reminder(
+    agent_id: str,
+    payload: LegacyReminderCreate,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> AuditReminderResponse:
+    try:
+        return ReminderService(db).create_reminder(
+            _create_payload(agent_id, payload), account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/agents/{agent_id}/reminders/{reminder_id}", response_model=AuditReminderResponse)
+def get_agent_reminder(
     agent_id: str,
     reminder_id: str,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
-):
-    reminder_service.delete_reminder(db, agent_id, reminder_id)
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> AuditReminderResponse:
+    try:
+        return ReminderService(db).get_reminder(
+            reminder_id, agent_id=agent_id, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+@router.patch("/agents/{agent_id}/reminders/{reminder_id}", response_model=AuditReminderResponse)
+def update_agent_reminder(
+    agent_id: str,
+    reminder_id: str,
+    payload: AuditReminderUpdate,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> AuditReminderResponse:
+    try:
+        return ReminderService(db).update_reminder(
+            reminder_id,
+            payload=payload,
+            agent_id=agent_id,
+            account_id=ctx.account_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-def _serialize(reminder, agent_id: str) -> dict:
-    return {
-        "reminder_id": reminder.reminder_id,
-        "agent_id": agent_id,
-        "title": reminder.title,
-        "message": reminder.message,
-        "frequency": reminder.frequency,
-        "next_trigger_at": reminder.next_trigger_at,
-        "last_triggered_at": reminder.last_triggered_at,
-        "is_active": reminder.is_active,
-        "created_at": reminder.created_at,
-    }
+
+@router.delete("/agents/{agent_id}/reminders/{reminder_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agent_reminder(
+    agent_id: str,
+    reminder_id: str,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> None:
+    try:
+        ReminderService(db).delete_reminder(
+            reminder_id, agent_id=agent_id, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

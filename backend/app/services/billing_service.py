@@ -11,6 +11,7 @@ from ..utils import utc_now
 
 
 PLAN_QUOTAS = {
+    "free": {"certificate_issuance": 3, "lineage_render": 1},
     "launch": {"certificate_issuance": 25, "lineage_render": 3},
     "scale": {"certificate_issuance": 250, "lineage_render": 25},
     "enterprise": {"certificate_issuance": 10000, "lineage_render": 10000},
