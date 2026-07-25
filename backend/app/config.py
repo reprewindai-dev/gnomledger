@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -39,6 +40,15 @@ class Settings(BaseSettings):
 
     api_key_secret: str = "change-this-secret-in-prod"
     bootstrap_admin_token: str = "dev-bootstrap-token"
+    notary_allowed_base_urls: list[str] = Field(
+        default_factory=lambda: [
+            "http://ollama:11434",
+            "http://localhost:11434",
+            "http://127.0.0.1:11434",
+            "https://api.openai.com/v1",
+            "https://generativelanguage.googleapis.com/v1beta",
+        ]
+    )
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     allow_anonymous_in_dev: bool = False
@@ -85,6 +95,35 @@ class Settings(BaseSettings):
         if not value or len(value) < minimum:
             raise ValueError(f"api_key_secret must be at least {minimum} characters")
         return value
+
+    @field_validator("bootstrap_admin_token")
+    @classmethod
+    def _validate_bootstrap_admin_token(cls, value: str, info) -> str:
+        environment = (info.data.get("environment") or "dev").lower()
+        if environment != "dev" and value in {"dev-bootstrap-token", "change-me", "changeme", ""}:
+            raise ValueError("bootstrap_admin_token must be overridden outside development")
+        return value
+
+    @field_validator("database_url")
+    @classmethod
+    def _validate_database_url(cls, value: str, info) -> str:
+        environment = (info.data.get("environment") or "dev").lower()
+        if environment != "dev" and value.startswith("sqlite"):
+            raise ValueError("database_url must not use sqlite outside development")
+        return value
+
+    @field_validator("notary_allowed_base_urls")
+    @classmethod
+    def _validate_notary_allowed_base_urls(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for url in value:
+            parsed = urlsplit(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError(f"Invalid notary base URL: {url}")
+            normalized = url.rstrip("/")
+            if normalized not in cleaned:
+                cleaned.append(normalized)
+        return cleaned
 
 
 @lru_cache(maxsize=1)

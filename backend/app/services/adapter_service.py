@@ -57,7 +57,7 @@ class AdapterService:
 
         # Calculate trust score
         base_score = 50.0
-        events = agent.ledger_events
+        events = sorted(agent.ledger_events, key=lambda event: (event.created_at, event.id))
         evidence_head = events[-1].event_hash if events else None
         
         for event in events:
@@ -106,8 +106,8 @@ class AdapterService:
             issued_at=certificate.issued_at,
         )
 
-        ledger_events = self.ledger_service.get_agent_history(agent_id=agent.agent_id, limit=500)
-        _, verify_payload = self.ledger_service.verify_chain(agent.agent_id)
+        ledger_events = self.ledger_service.get_agent_history(account_id=account_id, agent_id=agent.agent_id, limit=500)
+        _, verify_payload = self.ledger_service.verify_chain(account_id, agent.agent_id)
         chain_verification = LedgerChainVerifyRequest(**verify_payload)
         lineage = self.lineage_service.get_tree(account_id=account_id, agent_id=agent.agent_id, count_usage=False)
 

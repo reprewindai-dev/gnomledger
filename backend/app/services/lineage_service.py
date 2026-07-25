@@ -41,7 +41,9 @@ class LineageService:
                 .order_by(models.GenomeVersion.version.desc())
                 .limit(1)
             )
-        ).scalar_one()
+        ).scalar_one_or_none()
+        if latest_genome is None:
+            raise ValueError("Source agent has no genome versions")
 
         new_agent_id = short_id("agent")
         new_certificate_id = short_id("cert")
@@ -140,6 +142,8 @@ class LineageService:
             if account is None:
                 raise ValueError("Unknown account")
             limit = self.billing_service.plan_limit(account=account, metric="lineage_render")
-            self.billing_service.ensure_or_raise(account_id=account.id, metric="lineage_render", limit=limit)
-            self.billing_service.record_usage(account.id, "lineage_render", 1.0)
-        return self._build_tree(agent)
+            self.billing_service.reserve_usage(account.id, "lineage_render", 1.0, limit)
+        tree = self._build_tree(agent)
+        if count_usage:
+            self.db.commit()
+        return tree

@@ -38,9 +38,7 @@ class IncidentService:
             raise ValueError("Unknown agent_id")
         return agent
 
-    def create_incident(
-        self, payload: IncidentCreate, account_id: int | None = None
-    ) -> IncidentResponse:
+    def create_incident(self, payload: IncidentCreate, account_id: int | None = None) -> IncidentResponse:
         agent = self._get_agent(payload.agent_id, account_id)
         incident = models.IncidentRecord(
             agent_id=agent.id,

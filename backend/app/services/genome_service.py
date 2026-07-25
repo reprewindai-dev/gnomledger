@@ -14,16 +14,19 @@ class GenomeService:
         self.db = db
         self.ledger_service = LedgerService(db)
 
-    def _get_agent(self, agent_id: str) -> models.Agent:
+    def _get_agent(self, account_id: int, agent_id: str) -> models.Agent:
         agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
+            select(models.Agent).where(
+                models.Agent.account_id == account_id,
+                models.Agent.agent_id == agent_id,
+            )
         ).scalar_one_or_none()
         if not agent:
             raise ValueError("Unknown agent_id")
         return agent
 
-    def update_genome(self, agent_id: str, payload: GenomeUpdateRequest) -> GenomePayload:
-        agent = self._get_agent(agent_id)
+    def update_genome(self, account_id: int, agent_id: str, payload: GenomeUpdateRequest) -> GenomePayload:
+        agent = self._get_agent(account_id, agent_id)
         latest_version = (
             self.db.execute(
                 select(models.GenomeVersion)
@@ -67,7 +70,8 @@ class GenomeService:
                 actor=payload.changes.intended_use if payload.changes.intended_use else agent.creator,
                 summary=payload.note,
                 details={"genome_hash": new_hash, "note": payload.note},
-            )
+            ),
+            account_id=agent.account_id,
         )
 
         return GenomePayload(**new_payload)

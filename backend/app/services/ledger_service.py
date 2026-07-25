@@ -18,6 +18,15 @@ class LedgerService:
         self.db = db
         self.analytics_service = AnalyticsService(db)
 
+    def _get_agent(self, account_id: int | None, agent_id: str) -> models.Agent:
+        conditions = [models.Agent.agent_id == agent_id]
+        if account_id is not None:
+            conditions.append(models.Agent.account_id == account_id)
+        agent = self.db.execute(select(models.Agent).where(*conditions)).scalar_one_or_none()
+        if not agent:
+            raise ValueError("Unknown agent_id")
+        return agent
+
     def _latest_event(self, agent_db_id: int) -> models.LedgerEvent | None:
         stmt = (
             select(models.LedgerEvent)
@@ -27,12 +36,8 @@ class LedgerService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def log_event(self, payload: LedgerEventCreate) -> LedgerEventResponse:
-        agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == payload.agent_id)
-        ).scalar_one_or_none()
-        if not agent:
-            raise ValueError("Unknown agent_id")
+    def log_event(self, payload: LedgerEventCreate, account_id: int | None = None) -> LedgerEventResponse:
+        agent = self._get_agent(account_id, payload.agent_id)
 
         previous = self._latest_event(agent.id)
         prev_hash = previous.event_hash if previous else None
@@ -168,12 +173,8 @@ class LedgerService:
             chain_head=event.event_hash,
         )
 
-    def batch_events(self, agent_id: str, batch_id: str) -> LedgerEventResponse | None:
-        agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
-        ).scalar_one_or_none()
-        if not agent:
-            raise ValueError("Unknown agent_id")
+    def batch_events(self, account_id: int, agent_id: str, batch_id: str) -> LedgerEventResponse | None:
+        agent = self._get_agent(account_id, agent_id)
             
         unbatched = list(self.db.execute(
             select(models.LedgerEvent)
@@ -201,19 +202,16 @@ class LedgerService:
             tier=3,
             batch_id=batch_id
         )
-        return self.log_event(payload)
+        return self.log_event(payload, account_id=account_id)
 
     def get_agent_history(
         self,
+        account_id: int,
         agent_id: str,
         limit: int = 100,
         cursor: int | None = None,
     ) -> list[LedgerEventResponse]:
-        agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
-        ).scalar_one_or_none()
-        if not agent:
-            raise ValueError("Unknown agent_id")
+        agent = self._get_agent(account_id, agent_id)
 
         stmt = (
             select(models.LedgerEvent)
@@ -240,12 +238,14 @@ class LedgerService:
             for e in events
         ]
 
-    def verify_chain(self, agent_id: str) -> tuple[bool, dict[str, object]]:
-        agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
-        ).scalar_one_or_none()
-        if not agent:
-            raise ValueError("Unknown agent_id")
+    def verify_chain(
+        self, account_id: int | str, agent_id: str | None = None
+    ) -> tuple[bool, dict[str, object]]:
+        # Internal callers may omit account scope; API callers always supply it.
+        if agent_id is None:
+            agent_id = str(account_id)
+            account_id = None
+        agent = self._get_agent(account_id, agent_id)
 
         events = list(
             self.db.execute(

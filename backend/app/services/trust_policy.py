@@ -1,6 +1,7 @@
 from typing import Any
 
 from ..models import LedgerEvent
+from ..utils import canonical_timestamp
 
 
 class TrustPolicyV1:
@@ -13,7 +14,13 @@ class TrustPolicyV1:
         evidence_head = None
 
         if events:
-            evidence_head = events[-1].event_hash
+            # Normalize timestamps because SQLite returns naive values for
+            # timezone-aware columns; unsaved events may not have an id yet.
+            latest_event = max(
+                events,
+                key=lambda event: (canonical_timestamp(event.created_at), event.id or 0),
+            )
+            evidence_head = latest_event.event_hash
 
         for event in events:
             if event.event_type == "birth_registration":

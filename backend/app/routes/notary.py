@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlsplit
 from typing import Literal, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from ..config import get_settings
 from ..dependencies import auth_context
 from ..schemas import PGLRequestContext
 
@@ -51,12 +53,22 @@ def _clean_base_url(value: str) -> str:
     return value.rstrip("/")
 
 
+def _resolve_base_url(requested: str | None, fallback: str) -> str:
+    settings = get_settings()
+    base_url = _clean_base_url(requested or fallback)
+    if requested:
+        normalized = base_url
+        if normalized not in settings.notary_allowed_base_urls:
+            parsed = urlsplit(normalized)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"provider_base_url is not allowed: {parsed.scheme}://{parsed.netloc}",
+            )
+    return base_url
+
+
 async def _call_ollama(body: NotaryChatRequest) -> NotaryChatResponse:
-    base_url = _clean_base_url(
-        body.provider_base_url
-        or os.environ.get("OLLAMA_BASE_URL")
-        or "http://ollama:11434"
-    )
+    base_url = _resolve_base_url(body.provider_base_url, os.environ.get("OLLAMA_BASE_URL") or "http://ollama:11434")
     model = body.model or os.environ.get("OLLAMA_MODEL") or "llama3.1"
     payload = {
         "model": model,
@@ -90,10 +102,9 @@ async def _call_openai_compatible(body: NotaryChatRequest) -> NotaryChatResponse
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing provider_api_key for openai_compatible provider.",
         )
-    base_url = _clean_base_url(
-        body.provider_base_url
-        or os.environ.get("OPENAI_COMPATIBLE_BASE_URL")
-        or _OPENAI_COMPATIBLE_DEFAULT_BASE
+    base_url = _resolve_base_url(
+        body.provider_base_url,
+        os.environ.get("OPENAI_COMPATIBLE_BASE_URL") or _OPENAI_COMPATIBLE_DEFAULT_BASE,
     )
     model = body.model or os.environ.get("OPENAI_COMPATIBLE_MODEL") or "gpt-4o-mini"
     payload = {

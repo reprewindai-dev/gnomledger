@@ -16,11 +16,11 @@ router = APIRouter(prefix="/ledger")
 def create_ledger_event(
     payload: LedgerEventCreate,
     db: Session = Depends(get_db),
-    _ctx=Depends(require_role("operator", "admin", "owner")),
+    ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> LedgerEventResponse:
     service = LedgerService(db)
     try:
-        return service.log_event(payload)
+        return service.log_event(payload, account_id=ctx.account_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -31,11 +31,11 @@ def get_agent_history(
     limit: int = Query(default=200, ge=1, le=500),
     cursor: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
-    _ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> list[LedgerEventResponse]:
     service = LedgerService(db)
     try:
-        return service.get_agent_history(agent_id=agent_id, limit=limit, cursor=cursor)
+        return service.get_agent_history(ctx.account_id, agent_id=agent_id, limit=limit, cursor=cursor)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -44,11 +44,11 @@ def get_agent_history(
 def verify_agent_chain(
     agent_id: str,
     db: Session = Depends(get_db),
-    _ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> LedgerChainVerifyRequest:
     service = LedgerService(db)
     try:
-        _, payload = service.verify_chain(agent_id)
+        _, payload = service.verify_chain(ctx.account_id, agent_id)
         return LedgerChainVerifyRequest(**payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -59,11 +59,13 @@ def get_batch_proof(
     batch_id: str,
     event_id: str = Query(..., description="The event_id to get the proof for"),
     db: Session = Depends(get_db),
-    _ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ):
     # Fetch all events in this batch
     events = list(
         db.query(models.LedgerEvent)
+        .join(models.Agent, models.LedgerEvent.agent_id == models.Agent.id)
+        .filter(models.Agent.account_id == ctx.account_id)
         .filter(models.LedgerEvent.batch_id == batch_id, models.LedgerEvent.tier == 4)
         .order_by(models.LedgerEvent.id.asc())
         .all()

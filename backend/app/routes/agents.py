@@ -23,6 +23,15 @@ from .. import models
 router = APIRouter(prefix="/agents")
 
 
+def _latest_genome_version(db: Session, agent_db_id: int):
+    return db.execute(
+        select(models.GenomeVersion)
+        .where(models.GenomeVersion.agent_id == agent_db_id)
+        .order_by(models.GenomeVersion.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 def create_agent(
     payload: AgentCreateRequest,
@@ -77,7 +86,7 @@ def list_agents(
     result: list[AgentDetailResponse] = []
     for row in rows:
         cert = next((c for c in [row.certificate] if c), None)
-        latest = row.genome_versions[-1] if row.genome_versions else None
+        latest = _latest_genome_version(db, row.id)
         if not cert or not latest:
             continue
 
@@ -131,12 +140,7 @@ def get_agent(
     ).scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown agent_id")
-    latest = db.execute(
-        select(models.GenomeVersion)
-        .where(models.GenomeVersion.agent_id == agent.id)
-        .order_by(models.GenomeVersion.version.desc())
-        .limit(1)
-    ).scalar_one_or_none()
+    latest = _latest_genome_version(db, agent.id)
     if not latest:
         raise HTTPException(status_code=500, detail="Agent has no genome versions")
 
@@ -210,7 +214,7 @@ def update_genome(
 ) -> GenomePayload:
     service = GenomeService(db)
     try:
-        return service.update_genome(agent_id, payload)
+        return service.update_genome(ctx.account_id, agent_id, payload)
     except ValueError as exc:
         message = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND
@@ -255,12 +259,7 @@ def rebuild_agent_trust(
     db.commit()
     db.refresh(agent)
 
-    latest = db.execute(
-        select(models.GenomeVersion)
-        .where(models.GenomeVersion.agent_id == agent.id)
-        .order_by(models.GenomeVersion.version.desc())
-        .limit(1)
-    ).scalar_one_or_none()
+    latest = _latest_genome_version(db, agent.id)
     if not latest:
         raise HTTPException(status_code=500, detail="Agent has no genome versions")
 
@@ -297,9 +296,8 @@ def validate_execution(
 ) -> ExecutionValidateResponse:
     agent = db.execute(
         select(models.Agent)
-        .where(models.Agent.agent_id == payload.agent_id)
+        .where(models.Agent.account_id == ctx.account_id, models.Agent.agent_id == payload.agent_id)
     ).scalar_one_or_none()
-    
     if not agent:
         return ExecutionValidateResponse(
             allowed=False,
@@ -311,12 +309,14 @@ def validate_execution(
             evidence_head=None,
         )
 
+    latest_version = _latest_genome_version(db, agent.id)
+
     # Validate active status
     if agent.status not in ("active", "registered", "standard"):
         return ExecutionValidateResponse(
             allowed=False,
             agent_certificate_id=agent.certificate.certificate_id if agent.certificate else None,
-            canonical_genome_hash=agent.genome_versions[-1].genome_hash if agent.genome_versions else None,
+            canonical_genome_hash=latest_version.genome_hash if latest_version else None,
             trust_score=0.0,
             risk_tier="terminated",
             trust_policy_version="v1",
@@ -328,7 +328,7 @@ def validate_execution(
         return ExecutionValidateResponse(
             allowed=False,
             agent_certificate_id=agent.certificate.certificate_id if agent.certificate else None,
-            canonical_genome_hash=agent.genome_versions[-1].genome_hash if agent.genome_versions else None,
+            canonical_genome_hash=latest_version.genome_hash if latest_version else None,
             trust_score=0.0,
             risk_tier="terminated",
             trust_policy_version="v1",
@@ -339,7 +339,6 @@ def validate_execution(
         agent.workspace_id = payload.workspace_id
         db.commit()
 
-    latest_version = agent.genome_versions[-1] if agent.genome_versions else None
     if not latest_version or latest_version.genome_hash != payload.expected_genome_hash:
         return ExecutionValidateResponse(
             allowed=False,

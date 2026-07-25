@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..schemas import AuditReminderCreate, AuditReminderResponse
+from ..schemas import AuditReminderCreate, AuditReminderResponse, AuditReminderUpdate
 from ..utils import short_id, utc_now
 
 
@@ -28,17 +28,17 @@ class ReminderService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _get_agent(self, account_id: int | None, agent_id: str) -> models.Agent:
-        conditions = [models.Agent.agent_id == agent_id]
+    def _get_agent(self, agent_id: str, account_id: int | None = None) -> models.Agent:
+        stmt = select(models.Agent).where(models.Agent.agent_id == agent_id)
         if account_id is not None:
-            conditions.append(models.Agent.account_id == account_id)
-        agent = self.db.execute(select(models.Agent).where(*conditions)).scalar_one_or_none()
+            stmt = stmt.where(models.Agent.account_id == account_id)
+        agent = self.db.execute(stmt).scalar_one_or_none()
         if not agent:
             raise ValueError("Unknown agent_id")
         return agent
 
     def create_reminder(self, payload: AuditReminderCreate, account_id: int | None = None) -> AuditReminderResponse:
-        agent = self._get_agent(account_id, payload.agent_id)
+        agent = self._get_agent(payload.agent_id, account_id)
         reminder = models.AuditReminder(
             agent_id=agent.id,
             reminder_id=short_id("rem"),
@@ -56,11 +56,11 @@ class ReminderService:
 
     def list_reminders(
         self,
-        account_id: int | None = None,
         agent_id: str | None = None,
         active_only: bool = False,
         limit: int = 200,
         offset: int = 0,
+        account_id: int | None = None,
     ) -> list[AuditReminderResponse]:
         stmt = (
             select(models.AuditReminder, models.Agent)
@@ -78,7 +78,12 @@ class ReminderService:
         rows = self.db.execute(stmt).all()
         return [_to_response(reminder, agent.agent_id) for reminder, agent in rows]
 
-    def get_reminder(self, reminder_id: str, agent_id: str | None = None, account_id: int | None = None) -> AuditReminderResponse:
+    def get_reminder(
+        self,
+        reminder_id: str,
+        agent_id: str | None = None,
+        account_id: int | None = None,
+    ) -> AuditReminderResponse:
         stmt = (
             select(models.AuditReminder, models.Agent)
             .join(models.Agent, models.AuditReminder.agent_id == models.Agent.id)
@@ -133,9 +138,16 @@ class ReminderService:
         self.db.refresh(reminder)
         return _to_response(reminder, agent.agent_id)
 
-    def delete_reminder(self, reminder_id: str, agent_id: str | None = None, account_id: int | None = None) -> None:
-        stmt = select(models.AuditReminder).join(models.Agent).where(
-            models.AuditReminder.reminder_id == reminder_id
+    def delete_reminder(
+        self,
+        reminder_id: str,
+        agent_id: str | None = None,
+        account_id: int | None = None,
+    ) -> None:
+        stmt = (
+            select(models.AuditReminder)
+            .join(models.Agent)
+            .where(models.AuditReminder.reminder_id == reminder_id)
         )
         if account_id is not None:
             stmt = stmt.where(models.Agent.account_id == account_id)
@@ -147,7 +159,12 @@ class ReminderService:
         self.db.delete(reminder)
         self.db.commit()
 
-    def trigger_reminder(self, reminder_id: str, agent_id: str | None = None, account_id: int | None = None) -> AuditReminderResponse:
+    def trigger_reminder(
+        self,
+        reminder_id: str,
+        agent_id: str | None = None,
+        account_id: int | None = None,
+    ) -> AuditReminderResponse:
         stmt = (
             select(models.AuditReminder, models.Agent)
             .join(models.Agent, models.AuditReminder.agent_id == models.Agent.id)

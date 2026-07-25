@@ -25,22 +25,6 @@ def _create_payload(agent_id: str, body: LegacyReminderCreate) -> AuditReminderC
     return AuditReminderCreate(agent_id=agent_id, **body.model_dump())
 
 
-def _update_payload(
-    title: str | None,
-    message: str | None,
-    frequency: Literal["once", "daily", "weekly", "monthly"] | None,
-    next_trigger_at: datetime | None,
-    is_active: bool | None,
-) -> AuditReminderUpdate:
-    return AuditReminderUpdate(
-        title=title,
-        message=message,
-        frequency=frequency,
-        next_trigger_at=next_trigger_at,
-        is_active=is_active,
-    )
-
-
 @router.get("/reminders/", response_model=list[AuditReminderResponse])
 def list_reminders(
     agent_id: str | None = Query(default=None),
@@ -51,11 +35,11 @@ def list_reminders(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> list[AuditReminderResponse]:
     return ReminderService(db).list_reminders(
+        ctx.account_id,
         agent_id=agent_id,
         active_only=active_only,
         limit=limit,
         offset=offset,
-        account_id=ctx.account_id,
     )
 
 
@@ -66,7 +50,7 @@ def create_reminder(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> AuditReminderResponse:
     try:
-        return ReminderService(db).create_reminder(payload, account_id=ctx.account_id)
+        return ReminderService(db).create_reminder(payload, ctx.account_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -78,7 +62,7 @@ def get_reminder(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> AuditReminderResponse:
     try:
-        return ReminderService(db).get_reminder(reminder_id, account_id=ctx.account_id)
+        return ReminderService(db).get_reminder(ctx.account_id, reminder_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -92,7 +76,13 @@ def update_reminder(
 ) -> AuditReminderResponse:
     try:
         return ReminderService(db).update_reminder(
-            reminder_id, payload=payload, account_id=ctx.account_id
+            ctx.account_id,
+            reminder_id,
+            title=payload.title,
+            message=payload.message,
+            frequency=payload.frequency,
+            next_trigger_at=payload.next_trigger_at,
+            is_active=payload.is_active,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -105,7 +95,7 @@ def delete_reminder(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> None:
     try:
-        ReminderService(db).delete_reminder(reminder_id, account_id=ctx.account_id)
+        ReminderService(db).delete_reminder(ctx.account_id, reminder_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -117,7 +107,7 @@ def trigger_reminder(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> AuditReminderResponse:
     try:
-        return ReminderService(db).trigger_reminder(reminder_id, account_id=ctx.account_id)
+        return ReminderService(db).trigger_reminder(ctx.account_id, reminder_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -132,11 +122,11 @@ def list_agent_reminders(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> list[AuditReminderResponse]:
     return ReminderService(db).list_reminders(
+        ctx.account_id,
         agent_id=agent_id,
         active_only=active_only,
         limit=limit,
         offset=offset,
-        account_id=ctx.account_id,
     )
 
 
@@ -148,9 +138,7 @@ def create_agent_reminder(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> AuditReminderResponse:
     try:
-        return ReminderService(db).create_reminder(
-            _create_payload(agent_id, payload), account_id=ctx.account_id
-        )
+        return ReminderService(db).create_reminder(_create_payload(agent_id, payload), ctx.account_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -163,9 +151,7 @@ def get_agent_reminder(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> AuditReminderResponse:
     try:
-        return ReminderService(db).get_reminder(
-            reminder_id, agent_id=agent_id, account_id=ctx.account_id
-        )
+        return ReminderService(db).get_reminder(ctx.account_id, reminder_id, agent_id=agent_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -180,10 +166,14 @@ def update_agent_reminder(
 ) -> AuditReminderResponse:
     try:
         return ReminderService(db).update_reminder(
+            ctx.account_id,
             reminder_id,
-            payload=payload,
+            title=payload.title,
+            message=payload.message,
+            frequency=payload.frequency,
+            next_trigger_at=payload.next_trigger_at,
+            is_active=payload.is_active,
             agent_id=agent_id,
-            account_id=ctx.account_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -197,8 +187,6 @@ def delete_agent_reminder(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> None:
     try:
-        ReminderService(db).delete_reminder(
-            reminder_id, agent_id=agent_id, account_id=ctx.account_id
-        )
+        ReminderService(db).delete_reminder(ctx.account_id, reminder_id, agent_id=agent_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

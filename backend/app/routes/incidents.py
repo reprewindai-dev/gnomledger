@@ -35,12 +35,12 @@ def list_incidents(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> list[IncidentResponse]:
     return IncidentService(db).list_incidents(
+        ctx.account_id,
         agent_id=agent_id,
         status=status_filter,
         severity=severity,
         limit=limit,
         offset=offset,
-        account_id=ctx.account_id,
     )
 
 
@@ -51,7 +51,7 @@ def create_incident(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> IncidentResponse:
     try:
-        return IncidentService(db).create_incident(payload, account_id=ctx.account_id)
+        return IncidentService(db).create_incident(payload, ctx.account_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -63,7 +63,7 @@ def get_incident(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> IncidentResponse:
     try:
-        return IncidentService(db).get_incident(incident_id, account_id=ctx.account_id)
+        return IncidentService(db).get_incident(ctx.account_id, incident_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -77,7 +77,7 @@ def update_incident(
 ) -> IncidentResponse:
     try:
         return IncidentService(db).update_incident(
-            incident_id, payload, account_id=ctx.account_id
+            ctx.account_id, incident_id, payload
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -90,7 +90,7 @@ def delete_incident(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> None:
     try:
-        IncidentService(db).delete_incident(incident_id, account_id=ctx.account_id)
+        IncidentService(db).delete_incident(ctx.account_id, incident_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -106,12 +106,12 @@ def list_agent_incidents(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> list[IncidentResponse]:
     return IncidentService(db).list_incidents(
+        ctx.account_id,
         agent_id=agent_id,
         status=status_filter,
         severity=severity,
         limit=limit,
         offset=offset,
-        account_id=ctx.account_id,
     )
 
 
@@ -123,9 +123,7 @@ def create_agent_incident(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> IncidentResponse:
     try:
-        return IncidentService(db).create_incident(
-            _create_payload(agent_id, payload), account_id=ctx.account_id
-        )
+        return IncidentService(db).create_incident(_create_payload(agent_id, payload), ctx.account_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -138,9 +136,7 @@ def get_agent_incident(
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> IncidentResponse:
     try:
-        return IncidentService(db).get_incident(
-            incident_id, agent_id=agent_id, account_id=ctx.account_id
-        )
+        return IncidentService(db).get_incident(ctx.account_id, incident_id, agent_id=agent_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -155,7 +151,7 @@ def update_agent_incident(
 ) -> IncidentResponse:
     try:
         return IncidentService(db).update_incident(
-            incident_id, payload, agent_id=agent_id, account_id=ctx.account_id
+            ctx.account_id, incident_id, payload, agent_id=agent_id
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -169,8 +165,6 @@ def delete_agent_incident(
     ctx=Depends(require_role("operator", "admin", "owner")),
 ) -> None:
     try:
-        IncidentService(db).delete_incident(
-            incident_id, agent_id=agent_id, account_id=ctx.account_id
-        )
+        IncidentService(db).delete_incident(ctx.account_id, incident_id, agent_id=agent_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

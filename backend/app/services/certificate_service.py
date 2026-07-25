@@ -51,7 +51,7 @@ class CertificateService:
         parent_agents = self._assert_parent_agents_exist(account_id, payload.parent_agent_ids)
 
         limit = self.billing_service.plan_limit(account, "certificate_issuance")
-        self.billing_service.ensure_or_raise(account.id, "certificate_issuance", limit)
+        self.billing_service.reserve_usage(account.id, "certificate_issuance", 1.0, limit)
 
         agent_identifier = short_id("agent")
         certificate_identifier = short_id("cert")
@@ -120,6 +120,8 @@ class CertificateService:
                 "parent_agent_ids": payload.parent_agent_ids,
             },
             prev_event_hash=None,
+            tier=4,
+            batch_id=None,
             event_hash="",
         )
         ledger_event.created_at = utc_now()
@@ -132,12 +134,13 @@ class CertificateService:
                 "summary": ledger_event.summary,
                 "details": ledger_event.details,
                 "prev_event_hash": ledger_event.prev_event_hash,
+                "tier": ledger_event.tier,
+                "batch_id": ledger_event.batch_id,
                 "created_at": canonical_timestamp(ledger_event.created_at),
             }
         )
         self.db.add(ledger_event)
         self.db.flush()
-        self.billing_service.record_usage(account.id, "certificate_issuance", 1.0)
 
         # Recalculate trust snapshot and save to DB in same transaction
         from .trust_policy import TrustPolicyV1

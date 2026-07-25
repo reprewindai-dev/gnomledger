@@ -31,6 +31,18 @@ class BillingService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _current_period_totals(self, account_id: int, metric: str) -> tuple[datetime, datetime, float]:
+        period_start, period_end = _month_bucket(utc_now())
+        total = self.db.execute(
+            select(func.coalesce(func.sum(models.BillingUsage.amount), 0)).where(
+                models.BillingUsage.account_id == account_id,
+                models.BillingUsage.metric == metric,
+                models.BillingUsage.period_start >= period_start,
+                models.BillingUsage.period_end <= period_end,
+            )
+        ).scalar_one_or_none() or 0
+        return period_start, period_end, float(total)
+
     def record_usage(
         self,
         account_id: int,
@@ -47,21 +59,11 @@ class BillingService:
             period_end=period_end,
         )
         self.db.add(usage)
-        self.db.commit()
-        self.db.refresh(usage)
+        self.db.flush()
         return usage
 
     def ensure_quota(self, account_id: int, metric: str, limit: float) -> bool:
-        period_start, period_end = _month_bucket(utc_now())
-        total = self.db.execute(
-            select(func.coalesce(func.sum(models.BillingUsage.amount), 0)).where(
-                models.BillingUsage.account_id == account_id,
-                models.BillingUsage.metric == metric,
-                models.BillingUsage.period_start >= period_start,
-                models.BillingUsage.period_end <= period_end,
-            )
-        ).scalar_one_or_none() or 0
-        total = float(total)
+        _, _, total = self._current_period_totals(account_id, metric)
         return total < limit
 
     def list_usage(self, account_id: int) -> list[models.BillingUsage]:
@@ -75,6 +77,18 @@ class BillingService:
     def ensure_or_raise(self, account_id: int, metric: str, limit: float) -> None:
         if not self.ensure_quota(account_id=account_id, metric=metric, limit=limit):
             raise ValueError(f"Usage quota exceeded for metric '{metric}'")
+
+    def reserve_usage(self, account_id: int, metric: str, amount: float, limit: float) -> models.BillingUsage:
+        account = self.db.execute(
+            select(models.Account).where(models.Account.id == account_id).with_for_update()
+        ).scalar_one_or_none()
+        if account is None:
+            raise ValueError("Unknown account")
+
+        _, _, used = self._current_period_totals(account_id, metric)
+        if used + amount > limit:
+            raise ValueError(f"Usage quota exceeded for metric '{metric}'")
+        return self.record_usage(account_id, metric, amount)
 
     def plan_limit(self, account: models.Account, metric: str) -> float:
         limits = PLAN_QUOTAS.get(account.tier, PLAN_QUOTAS["launch"])
