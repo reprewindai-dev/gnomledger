@@ -16,6 +16,8 @@ from veklom_amphoteric import AmphotericRouter, create_mcp_endpoints
 from .config import get_settings
 from .database import check_database, init_database
 from .routes import create_api_router
+from .routes.health_dependencies import router as health_dependencies_router
+from .routes.protocol import router as protocol_router
 from .schemas import ErrorResponse, HealthResponse
 from .utils import utc_now
 
@@ -84,6 +86,8 @@ def _build_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(create_api_router())
+    app.include_router(protocol_router)
+    app.include_router(health_dependencies_router)
 
     amphoteric = AmphotericRouter()
 
