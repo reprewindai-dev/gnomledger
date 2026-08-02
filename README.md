@@ -12,12 +12,12 @@ The repository is structured as a deployable module that can be integrated into 
 
 ## Documentation
 
-- [Docs Index](C:\Users\antho\OneDrive\Desktop\Documents\pgl\docs\README.md)
-- [Operator Manual](C:\Users\antho\OneDrive\Desktop\Documents\pgl\docs\operator-manual.md)
-- [Module Packaging Guide](C:\Users\antho\OneDrive\Desktop\Documents\pgl\docs\module-packaging.md)
-- [Architecture](C:\Users\antho\OneDrive\Desktop\Documents\pgl\docs\architecture.md)
-- [Deployment Operations](C:\Users\antho\OneDrive\Desktop\Documents\pgl\docs\deployment-operations.md)
-- [Security Compliance](C:\Users\antho\OneDrive\Desktop\Documents\pgl\docs\security-compliance.md)
+- [Docs Index](docs/README.md)
+- [Operator Manual](docs/operator-manual.md)
+- [Module Packaging Guide](docs/module-packaging.md)
+- [Architecture](docs/architecture.md)
+- [Deployment Operations](docs/deployment-operations.md)
+- [Security Compliance](docs/security-compliance.md)
 
 ## Repository Contents
 
@@ -97,7 +97,7 @@ The bootstrap response contains `api_key`. Pass it in the `x-api-key` header for
    - `GET /api/v1/lineage/tree/{agent_id}`
 6. Export compliance and replay artifacts from the frontend rail actions.
 
-The full operator flow is documented in [docs/operator-manual.md](C:\Users\antho\OneDrive\Desktop\Documents\pgl\docs\operator-manual.md).
+The full operator flow is documented in [docs/operator-manual.md](docs/operator-manual.md).
 
 ## Environment Variables
 
@@ -174,4 +174,4 @@ npm run build
 
 ## License
 
-See [LICENSE](C:\Users\antho\OneDrive\Desktop\Documents\pgl\LICENSE). This repository is proprietary and may not be reused or redistributed without written authorization.
+See [LICENSE](LICENSE). This repository is proprietary and may not be reused or redistributed without written authorization.
