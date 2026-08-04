@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import secrets
 import time
@@ -9,9 +11,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-import hashlib
-import json
-from veklom_amphoteric import AmphotericRouter, create_mcp_endpoints
+try:
+    from veklom_amphoteric import AmphotericRouter, create_mcp_endpoints
+except ImportError:  # Optional integration is not present in a clean checkout.
+    AmphotericRouter = None
+    create_mcp_endpoints = None
 
 from .config import get_settings
 from .database import check_database, init_database
@@ -59,15 +63,15 @@ async def lifespan(app: FastAPI):
                 await asyncio.sleep(DATABASE_RETRY_INTERVAL_SECONDS)
 
     database_task = asyncio.create_task(initialize_database_until_ready())
-    
+
     from backend.app.services.capi_registration import register_with_capi
-    from backend.app.config import get_settings
+
     capi_task = asyncio.create_task(register_with_capi(get_settings()))
-    
+
     try:
         yield
     finally:
-        if capi_task and not capi_task.done():
+        if not capi_task.done():
             capi_task.cancel()
         if not database_task.done():
             database_task.cancel()
@@ -89,26 +93,33 @@ def _build_app() -> FastAPI:
     app.include_router(protocol_router)
     app.include_router(health_dependencies_router)
 
-    amphoteric = AmphotericRouter()
+    if AmphotericRouter is not None and create_mcp_endpoints is not None:
+        amphoteric = AmphotericRouter()
 
-    @amphoteric.tool("mint_settlement_evidence_tool", "Mint real settlement evidence with a SHA-256 Merkle root hash")
-    def mint_settlement_evidence_tool(payload: dict) -> dict:
-        # Calculate a deterministic SHA-256 hash for the payload
-        payload_str = json.dumps(payload, sort_keys=True).encode("utf-8")
-        evidence_hash = hashlib.sha256(payload_str).hexdigest()
-        
-        # 'Anchor' it by logging deterministically
-        import logging
-        logging.getLogger(__name__).info(f"Anchored settlement evidence: {evidence_hash}")
-        
-        return {
-            "status": "anchored", 
-            "evidence_hash": evidence_hash, 
-            "payload": payload
-        }
+        @amphoteric.tool(
+            "validate_settlement_evidence_structure",
+            "Compute an experimental content digest; this does not anchor or prove settlement evidence",
+        )
+        def validate_settlement_evidence_structure(payload: dict) -> dict:
+            payload_bytes = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            content_digest = hashlib.sha256(payload_bytes).hexdigest()
+            return {
+                "status": "EXPERIMENTAL_STRUCTURE_VALIDATION",
+                "content_digest": content_digest,
+                "anchored": False,
+                "zk_verified": False,
+                "durable_evidence": False,
+                "limitations": [
+                    "No verifier circuit or key provenance is configured.",
+                    "No public-input binding or replay protection is performed.",
+                    "No Lockerphycer, CAPPO, or durable Gnomledger anchoring is performed.",
+                ],
+            }
 
-    app.include_router(amphoteric.router)
-    create_mcp_endpoints(app, amphoteric)
+        app.include_router(amphoteric.router)
+        create_mcp_endpoints(app, amphoteric)
+    else:
+        logger.warning("veklom_amphoteric is unavailable; optional MCP tools were not registered")
 
     @app.middleware("http")
     async def request_identity(request: Request, call_next):
@@ -164,68 +175,32 @@ def _build_app() -> FastAPI:
             "event_types": [
                 "pre_execution_authorization",
                 "post_execution_attestation",
-                "violation"
+                "violation",
             ],
             "supports_idempotency": True,
-            "supports_chain_verification": True
+            "supports_chain_verification": True,
         }
 
     @app.get("/.well-known/x402.json", tags=["discovery"])
     async def x402_discovery():
-        return {
-            "x402_version": 2,
-            "provider": "GnomLedger — Programmable Governance Layer",
-            "facilitator_url": "https://x402.org/facilitator",
-            "rate_limit_policy": {
-                "free_trials_per_tenant": 5,
-                "behavior": "instant_paywall"
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "NOT_VERIFIED",
+                "service": "gnomledger",
+                "x402": "NOT_IMPLEMENTED",
+                "pricing": "NOT_CONFIGURED",
+                "payment_destination": "NOT_CONFIGURED",
+                "facilitator": "NOT_VERIFIED",
+                "routes": [],
+                "required_evidence": [
+                    "deployed commit provenance",
+                    "configured facilitator and payment destination",
+                    "negative and replay-protection tests",
+                    "successful durable settlement evidence in Gnomledger",
+                ],
             },
-            "network": "eip155:8453",
-            "payTo": "0xCC34553b4e6332ffb9C1b61E22436ACA53113D1d",
-            "currency": "USDC",
-            "identity": {
-                "veklom_id_app": "6a20f24cc341f72c2f573eb5",
-                "veklom_id_wallet": "0x3a74772e925b54F7dAD7FD95c9Ba30825033f970",
-                "verification_domain": "veklom-id.vercel.app",
-            },
-            "routes": [
-                {
-                    "route": "POST /api/v1/agents",
-                    "price": "$0.010",
-                    "description": "Register a new agent identity and issue a birth certificate with PGL hash.",
-                    "tags": ["pgl", "agent", "identity", "register", "veklom"],
-                },
-                {
-                    "route": "GET /api/v1/agents/{id}",
-                    "price": "$0.003",
-                    "description": "Retrieve agent genome, birth certificate, and lifecycle state.",
-                    "tags": ["pgl", "agent", "genome", "veklom"],
-                },
-                {
-                    "route": "GET /api/v1/agents/{id}/lineage",
-                    "price": "$0.005",
-                    "description": "Trace full agent lineage tree — forks, ancestry, and provenance chain.",
-                    "tags": ["pgl", "lineage", "provenance", "veklom"],
-                },
-                {
-                    "route": "GET /api/v1/ledger",
-                    "price": "$0.005",
-                    "description": "Query the append-only life ledger with hash-chain integrity verification.",
-                    "tags": ["pgl", "ledger", "audit", "hash-chain", "veklom"],
-                },
-                {
-                    "route": "POST /api/v1/agents/{id}/fork",
-                    "price": "$0.015",
-                    "description": "Fork an agent genome, creating a new derived agent with ancestry link.",
-                    "tags": ["pgl", "fork", "genome", "agent", "veklom"],
-                },
-            ],
-            "discovery": {
-                "bazaar": "https://bazaar.cdp.coinbase.com",
-                "openapi": "https://pgl.veklom.com/docs",
-                "veklom_id": "https://veklom-id.vercel.app",
-            },
-        }
+        )
 
     return app
 
