@@ -59,7 +59,7 @@ npm install
 4. Start the API:
 
 ```bash
-uvicorn backend.app.main:app --reload
+uvicorn backend.app.main:app --reload --port 8001
 ```
 
 5. Start the frontend in a second shell:
