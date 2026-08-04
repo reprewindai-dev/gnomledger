@@ -90,19 +90,24 @@ def _unconfigured(name: str) -> dict[str, Any]:
 @router.get("/health/dependencies")
 async def dependency_health() -> dict[str, Any]:
     settings: Settings = get_settings()
-    checks: list[dict[str, Any]] = [await _probe_database()]
-
     http_dependencies = [
         ("capi", settings.capi_backend_url),
         ("ollama", os.getenv("OLLAMA_BASE_URL") or "http://ollama:11434"),
     ]
-    for name, url in http_dependencies:
-        checks.append(await _probe_http(name, url) if url else _unconfigured(name))
 
-    if settings.redis_url:
-        checks.append(await _probe_redis("redis", settings.redis_url))
-    else:
-        checks.append(_unconfigured("redis"))
+    probes = [
+        _probe_database(),
+        *(
+            _probe_http(name, url) if url else asyncio.sleep(0, result=_unconfigured(name))
+            for name, url in http_dependencies
+        ),
+        (
+            _probe_redis("redis", settings.redis_url)
+            if settings.redis_url
+            else asyncio.sleep(0, result=_unconfigured("redis"))
+        ),
+    ]
+    checks = list(await asyncio.gather(*probes))
 
     overall = max(checks, key=lambda check: _STATE_RANK[check["state"]])["state"]
     return {"status": overall, "dependencies": checks}
