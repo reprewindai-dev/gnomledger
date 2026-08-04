@@ -18,7 +18,19 @@ MANIFEST: dict[str, Any] = {
     "health": "/health",
     "dependencies": "/health/dependencies",
     "auth_mode": "api-key",
-    "status": "ok",
+    "status": "NOT_VERIFIED",
+    "verification": {
+        "source_contract": "CONFIGURED",
+        "runtime": "NOT_VERIFIED",
+        "required_evidence": [
+            "deployed_commit_provenance",
+            "container_listener_8001",
+            "http_health",
+            "protocol_identity",
+            "traefik_route",
+            "capi_registration",
+        ],
+    },
     "capabilities": [
         "issue_agent_certificates",
         "record_ledger_events",
@@ -61,5 +73,7 @@ async def introspect_capabilities(body: IntrospectQuery) -> dict[str, Any]:
         "matches": matches,
         "total": len(matches),
         "auth_mode": MANIFEST["auth_mode"],
+        "status": MANIFEST["status"],
+        "verification": MANIFEST["verification"],
         "links": MANIFEST["links"],
     }
