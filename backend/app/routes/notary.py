@@ -95,7 +95,7 @@ async def _call_openai_compatible(body: NotaryChatRequest) -> NotaryChatResponse
         or os.environ.get("OPENAI_COMPATIBLE_BASE_URL")
         or _OPENAI_COMPATIBLE_DEFAULT_BASE
     )
-    model = body.model or os.environ.get("OPENAI_COMPATIBLE_MODEL") or "gpt-4o-mini"
+    model = body.model or os.environ.get("OPENAI_COMPATIBLE_MODEL") or "llama3.2:1b"
     payload = {
         "model": model,
         "messages": [

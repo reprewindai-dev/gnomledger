@@ -102,7 +102,7 @@ export default function NotaryChat({ agents, selectedAgent, session }: NotaryCha
             onChange={e => {
               const provider = e.target.value as "ollama" | "openai_compatible" | "gemini";
               setSelectedProvider(provider);
-              setSelectedModel(provider === "ollama" ? "llama3.1" : provider === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini");
+              setSelectedModel(provider === "ollama" ? "llama3.1" : provider === "gemini" ? "gemini-2.5-flash" : "llama3.2:1b");
             }}
             className="bg-[#050505] border border-white/10 rounded px-2 py-1 text-[11px] font-mono text-white/70 outline-none cursor-pointer"
           >
@@ -124,8 +124,8 @@ export default function NotaryChat({ agents, selectedAgent, session }: NotaryCha
             )}
             {selectedProvider === "openai_compatible" && (
               <>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="gpt-4o">gpt-4o</option>
+                <option value="llama3.2:1b">llama3.2:1b</option>
+                <option value="llama3.2:1b">llama3.2:1b</option>
                 <option value="claude-3-5-sonnet-latest">claude-3-5-sonnet-latest</option>
               </>
             )}

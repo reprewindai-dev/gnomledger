@@ -36,12 +36,25 @@ export interface AgentDetail {
   latest_genome_hash: string;
 }
 
+export interface ContextShapeAudit {
+  capability_id: string;
+  contract_version?: string;
+  jurisdiction?: string;
+  applicable_policies?: string[];
+  policy_version?: string;
+  fields_requested: string[];
+  fields_granted: string[];
+  fields_removed: string[];
+  secret_injections?: string[];
+  shaping_reason: string;
+}
+
 export interface LedgerEvent {
   event_id: string;
   event_type: string;
   actor: string;
   summary: string;
-  details: Record<string, string | number | boolean | string[]>;
+  details: Record<string, string | number | boolean | string[] | ContextShapeAudit>;
   prev_event_hash: string | null;
   event_hash: string;
   created_at: string;
