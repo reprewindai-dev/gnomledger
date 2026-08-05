@@ -265,3 +265,25 @@ class LedgerService:
                 "reason": "Ledger chain verified." if not errors else "Ledger chain verification failed.",
             },
         )
+
+    def get_event_by_hash(self, event_hash: str) -> LedgerEventResponse:
+        event = self.db.execute(
+            select(models.LedgerEvent).where(models.LedgerEvent.event_hash == event_hash)
+        ).scalar_one_or_none()
+        
+        if not event:
+            raise ValueError("Event not found")
+            
+        return LedgerEventResponse(
+            event_id=event.event_id,
+            event_type=event.event_type,
+            actor=event.actor,
+            summary=event.summary,
+            details=event.details,
+            prev_event_hash=event.prev_event_hash,
+            event_hash=event.event_hash,
+            created_at=event.created_at,
+            persisted=True,
+            idempotent_replay=False,
+            chain_head=event.event_hash
+        )
