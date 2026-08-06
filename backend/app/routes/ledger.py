@@ -51,14 +51,14 @@ def verify_agent_chain(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-@router.get("/events/hash/{event_hash}", response_model=LedgerEventResponse)
+@router.get("/proof/{hash}", response_model=LedgerEventResponse)
 def get_event_by_hash(
-    event_hash: str,
+    hash: str,
     db: Session = Depends(get_db),
     # Public route - intentionally no auth required for independent verifiability of hash
 ) -> LedgerEventResponse:
     service = LedgerService(db)
     try:
-        return service.get_event_by_hash(event_hash)
+        return service.get_event_by_hash(hash)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
