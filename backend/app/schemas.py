@@ -32,6 +32,12 @@ class AgentCreateRequest(BaseModel):
     parent_agent_ids: list[str] = Field(default_factory=list)
 
 
+class StandardComplianceResult(BaseModel):
+    id: str
+    version: str | None = None
+    result: Literal["PASS", "FAIL", "NOT_EVALUATED", "NOT_FOUND"]
+    reason: str | None = None
+
 class PreExecutionAuthorizationDetails(BaseModel):
     schema_version: Literal["pgl.pre_execution_authorization.v1"]
     run_id: str
@@ -48,6 +54,7 @@ class PreExecutionAuthorizationDetails(BaseModel):
     reserve_cents: int
     actor_id: str | None
     provenance: dict[str, Any]
+    standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
 
 
 class PostExecutionAttestationDetails(BaseModel):
@@ -60,6 +67,7 @@ class PostExecutionAttestationDetails(BaseModel):
     governance_decision: str
     actor_id: str | None
     provenance: dict[str, Any]
+    standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
 
 
 class AgentResponse(BaseModel):
