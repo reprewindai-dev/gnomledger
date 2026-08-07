@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_db, require_role
+from ..public_proof import PublicLedgerProofResponse, to_public_ledger_proof
 from ..schemas import LedgerChainVerifyRequest, LedgerEventCreate, LedgerEventResponse
 from ..services.ledger_service import LedgerService
 
@@ -51,14 +52,17 @@ def verify_agent_chain(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-@router.get("/proof/{hash}", response_model=LedgerEventResponse)
+
+@router.get("/proof/{hash}", response_model=PublicLedgerProofResponse)
 def get_event_by_hash(
     hash: str,
     db: Session = Depends(get_db),
-    # Public route - intentionally no auth required for independent verifiability of hash
-) -> LedgerEventResponse:
+    # Public route - intentionally no auth. Response is limited to non-sensitive
+    # hash lookup metadata and does not expose the underlying event payload.
+) -> PublicLedgerProofResponse:
     service = LedgerService(db)
     try:
-        return service.get_event_by_hash(hash)
+        event = service.get_event_by_hash(hash)
+        return to_public_ledger_proof(event)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
