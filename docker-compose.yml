@@ -3,11 +3,10 @@ services:
     build: .
     ports:
       - "8000:8000"
+    labels:
+      - "traefik.http.services.gnom.loadbalancer.server.port=8001"
     env_file:
-      - .env.example
-    environment:
-      DATABASE_URL: "sqlite:///./data/pgl.sqlite3"
-      ALLOW_ANONYMOUS_IN_DEV: "True"
+      - .env
     volumes:
       - ./data:/app/data
-    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8001
