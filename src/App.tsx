@@ -8,8 +8,7 @@ import {
   GitBranch,
   Layers3,
   ReceiptText,
-  ShieldCheck,
-  Sparkles
+  ShieldCheck
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -25,11 +24,9 @@ import {
   listAgents,
   verifyAgentHistory
 } from "./api";
-import { defaultGenome, demoBundle } from "./data";
 import type {
   AgentDetail,
   BillingUsage,
-  DemoBundle,
   GenomePayload,
   LedgerEvent,
   LineageTreeNode,
@@ -37,20 +34,35 @@ import type {
   UsageLimit
 } from "./types";
 
-const sessionStorageKey = "pgl-session";
-type WorkspaceSection = "registry" | "certificates" | "ledger" | "lineage" | "billing" | "investor";
-const demoSession: SessionState = {
-  apiKey: "demo-mode",
-  accountId: 0,
-  role: "investor"
+// ---------------------------------------------------------------------------
+// Default genome payload for the certificate issuance form.
+// Previously lived in data.ts alongside the now-deleted demoBundle.
+// ---------------------------------------------------------------------------
+const defaultGenome: GenomePayload = {
+  model_family: "GPT-Operator",
+  model_version: "2026.06",
+  architecture: "multi-agent orchestration",
+  tools: ["browser", "ledger", "deploy"],
+  permissions: ["issue_certificate", "write_ledger", "fork_lineage"],
+  safety_rules: ["human_escalation", "audit_required", "jurisdiction_locked"],
+  runtime_config: {
+    temperature: "0.2",
+    sandbox: "strict",
+    trace_level: "forensic"
+  },
+  intended_use: "Production deployment and accountable lifecycle management",
+  risk_category: "high"
 };
+
+const sessionStorageKey = "pgl-session";
+type WorkspaceSection = "registry" | "certificates" | "ledger" | "lineage" | "billing";
+
 const navItems: Array<{ label: string; icon: LucideIcon; section: WorkspaceSection }> = [
   { label: "Registry", icon: Bot, section: "registry" },
   { label: "Certificates", icon: BookLock, section: "certificates" },
   { label: "Ledger", icon: ReceiptText, section: "ledger" },
   { label: "Lineage", icon: GitBranch, section: "lineage" },
-  { label: "Billing", icon: Activity, section: "billing" },
-  { label: "Investor Mode", icon: Sparkles, section: "investor" }
+  { label: "Billing", icon: Activity, section: "billing" }
 ];
 
 function readSession(): SessionState | null {
@@ -118,9 +130,7 @@ export default function App() {
   } | null>(null);
   const [busy, setBusy] = useState<string>("");
   const [message, setMessage] = useState<string>("");
-  const [demoMode, setDemoMode] = useState<boolean>(true);
   const [activeSection, setActiveSection] = useState<WorkspaceSection>("certificates");
-  const activeSession = session ?? (demoMode ? demoSession : null);
 
   useEffect(() => {
     getHealth()
@@ -129,34 +139,33 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!activeSession) {
+    if (!session) {
       return;
     }
-    void refreshWorkspace(activeSession);
-  }, [activeSession]);
+    void refreshWorkspace(session);
+  }, [session]);
 
   useEffect(() => {
-    if (!activeSession || !selectedAgentId) {
+    if (!session || !selectedAgentId) {
       return;
     }
     void Promise.all([
-      getAgentHistory(activeSession, selectedAgentId).then(setLedgerEvents),
-      getLineageTree(activeSession, selectedAgentId).then(setLineage),
-      verifyAgentHistory(activeSession, selectedAgentId).then((result) =>
+      getAgentHistory(session, selectedAgentId).then(setLedgerEvents),
+      getLineageTree(session, selectedAgentId).then(setLineage),
+      verifyAgentHistory(session, selectedAgentId).then((result) =>
         setChainStatus({ status: result.status, valid: result.valid, checked_events: result.checked_events })
       )
     ]).catch((error: Error) => {
-      const demoLedger = demoBundle.ledgerByAgent[selectedAgentId] ?? [];
-      const demoLineage = demoBundle.lineageByAgent[selectedAgentId] ?? null;
-      setLedgerEvents(demoLedger);
-      setLineage(demoLineage);
-      setChainStatus({ status: "unmeasured", valid: null, checked_events: demoLedger.length });
-      setMessage(session ? error.message : "Investor replay is loaded from the local ledger snapshot.");
+      // Fail explicitly — no silent fallback to demo data.
+      setLedgerEvents([]);
+      setLineage(null);
+      setChainStatus(null);
+      setMessage(`Failed to load agent data: ${error.message}`);
     });
-  }, [activeSession, selectedAgentId]);
+  }, [session, selectedAgentId]);
 
   useEffect(() => {
-    if (session || demoMode) {
+    if (session) {
       return;
     }
     setAgents([]);
@@ -167,15 +176,7 @@ export default function App() {
     setSelectedAgentId("");
     setChainStatus(null);
     setMessage("");
-  }, [demoMode, session]);
-
-  function loadDemoBundle(bundle: DemoBundle, nextMessage: string) {
-    setAgents(bundle.agents);
-    setUsage(bundle.usage);
-    setUsageLimit(bundle.usageLimit);
-    setSelectedAgentId((current) => current || bundle.agents[0]?.agent_id || "");
-    setMessage(nextMessage);
-  }
+  }, [session]);
 
   async function refreshWorkspace(activeSession: SessionState) {
     try {
@@ -192,7 +193,8 @@ export default function App() {
       }
       setMessage("");
     } catch (error) {
-      loadDemoBundle(demoBundle, "Live registry unreachable. Investor replay data is loaded locally.");
+      // Fail explicitly — no silent fallback to local snapshot data.
+      setMessage(`Registry unreachable: ${(error as Error).message}`);
     }
   }
 
@@ -209,7 +211,8 @@ export default function App() {
       setSession(nextSession);
       setMessage("Bootstrap complete. Owner key issued and workspace unlocked.");
     } catch (error) {
-      loadDemoBundle(demoBundle, (error as Error).message);
+      // Fail explicitly — do not load demo data on bootstrap failure.
+      setMessage(`Bootstrap failed: ${(error as Error).message}`);
     } finally {
       setBusy("");
     }
@@ -257,7 +260,7 @@ export default function App() {
 
     downloadJson(`${selectedAgent.agent_id}-compliance-packet.json`, {
       exported_at: new Date().toISOString(),
-      mode: session ? "live" : "investor_replay",
+      mode: "live",
       agent: selectedAgent,
       ledger_events: ledgerEvents,
       lineage,
@@ -265,19 +268,6 @@ export default function App() {
       usage_limit: usageLimit
     });
     setMessage(`Compliance packet exported for ${selectedAgent.name}.`);
-  }
-
-  function handleGenerateInvestorReplay() {
-    const replayPayload = {
-      exported_at: new Date().toISOString(),
-      selected_agent_id: selectedAgentId,
-      bundle: demoBundle,
-      current_agent: selectedAgent,
-      current_ledger: ledgerEvents,
-      current_lineage: lineage
-    };
-    downloadJson(`${selectedAgentId || "investor"}-replay.json`, replayPayload);
-    setMessage("Investor replay package generated.");
   }
 
   return (
@@ -305,12 +295,6 @@ export default function App() {
             </button>
           ))}
         </nav>
-
-        <div className="investor-tile">
-          <p>Investor scenario</p>
-          <strong>Alpha/Beta lifecycle replay</strong>
-          <span>Demo mode armed</span>
-        </div>
       </aside>
 
       <main className="workspace">
@@ -327,14 +311,6 @@ export default function App() {
               onClick={() => {
                 writeSession(null);
                 setSession(null);
-                setAgents([]);
-                setLedgerEvents([]);
-                setLineage(null);
-                setUsage([]);
-                setUsageLimit(null);
-                setSelectedAgentId("");
-                setChainStatus(null);
-                setMessage(demoMode ? "Live owner key removed. Investor replay remains available." : "");
               }}
             >
               Reset local key
@@ -347,18 +323,12 @@ export default function App() {
 
         <section className="utility-bar">
           <div className="utility-chip">
-            <span>Investor Demo Mode</span>
-            <button className={`toggle-chip ${demoMode ? "on" : ""}`} onClick={() => setDemoMode((current) => !current)}>
-              <i />
-            </button>
-          </div>
-          <div className="utility-chip">
             <span>View as</span>
-            <strong>{activeSession?.role ?? "guest"}</strong>
+            <strong>{session?.role ?? "guest"}</strong>
           </div>
           <div className="utility-chip">
             <span>Network</span>
-            <strong>{session ? "Live registry" : demoMode ? "Investor replay" : "Offline"}</strong>
+            <strong>{session ? "Live registry" : "Not connected"}</strong>
           </div>
         </section>
 
@@ -371,7 +341,7 @@ export default function App() {
               <strong>Hash preview locked to genome payload</strong>
             </div>
 
-            {!activeSession ? (
+            {!session ? (
               <div className="bootstrap-grid">
                 <div className="bootstrap-copy">
                   <h3>Bootstrap the registry once, then operate from the owner key.</h3>
@@ -447,7 +417,6 @@ export default function App() {
                     Intended use
                     <textarea
                       value={issueForm.genome.intended_use}
-                      disabled={!session}
                       onChange={(event) =>
                         setIssueForm((current) => ({
                           ...current,
@@ -476,15 +445,13 @@ export default function App() {
                     <div className="hash-strip">
                       <Binary size={14} />
                       <code>
-                        {btoa(
-                          JSON.stringify(issueForm.genome)
-                        ).slice(0, 40)}
+                        {btoa(JSON.stringify(issueForm.genome)).slice(0, 40)}
                         ...
                       </code>
                     </div>
                     <div className="certificate-footer">
-                      <span>{session ? issueForm.jurisdiction : "Replay artifact"}</span>
-                      <span>{session ? issueForm.creator : "Investor scenario"}</span>
+                      <span>{issueForm.jurisdiction}</span>
+                      <span>{issueForm.creator}</span>
                     </div>
                   </div>
                 </div>
@@ -500,7 +467,11 @@ export default function App() {
             {lineageRows.length > 0 ? (
               <div className="lineage-list">
                 {lineageRows.map((node) => (
-                  <div className="lineage-row" key={`${node.agent_id}-${node.depth}`} style={{ paddingLeft: `${node.depth * 28 + 18}px` }}>
+                  <div
+                    className="lineage-row"
+                    key={`${node.agent_id}-${node.depth}`}
+                    style={{ paddingLeft: `${node.depth * 28 + 18}px` }}
+                  >
                     <GitBranch size={14} />
                     <div>
                       <strong>{node.name}</strong>
@@ -513,7 +484,11 @@ export default function App() {
             ) : (
               <div className="empty-state">
                 <Layers3 size={22} />
-                <p>Issue the first agent to start a lineage tree.</p>
+                <p>
+                  {session
+                    ? "Issue the first agent to start a lineage tree."
+                    : "Connect a live owner key to view agent lineage."}
+                </p>
               </div>
             )}
           </div>
@@ -547,6 +522,12 @@ export default function App() {
                   <span className="hash-preview">{agent.latest_genome_hash.slice(0, 10)}...</span>
                 </button>
               ))}
+              {agents.length === 0 && session && (
+                <div className="empty-state">
+                  <Bot size={22} />
+                  <p>No agents registered yet. Issue the first birth certificate above.</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -554,7 +535,15 @@ export default function App() {
             <div className="panel-head">
               <span>Life ledger</span>
               <strong>
-                {chainStatus ? `${chainStatus.checked_events} events, ${chainStatus.status === "verified" ? "chain verified" : chainStatus.status === "blocked" ? "chain blocked" : "chain unmeasured"}` : "Awaiting agent"}
+                {chainStatus
+                  ? `${chainStatus.checked_events} events, ${
+                      chainStatus.status === "verified"
+                        ? "chain verified"
+                        : chainStatus.status === "blocked"
+                        ? "chain blocked"
+                        : "chain unmeasured"
+                    }`
+                  : "Awaiting agent"}
               </strong>
             </div>
             {ledgerEvents.length > 0 ? (
@@ -576,7 +565,11 @@ export default function App() {
             ) : (
               <div className="empty-state">
                 <ReceiptText size={22} />
-                <p>The selected agent has no rendered event history yet.</p>
+                <p>
+                  {session && selectedAgentId
+                    ? "The selected agent has no rendered event history yet."
+                    : "Select an agent to view its ledger."}
+                </p>
               </div>
             )}
           </div>
@@ -598,7 +591,9 @@ export default function App() {
                   <div
                     className="meter-fill"
                     style={{
-                      width: usageLimit ? `${Math.min(100, (usageLimit.used / usageLimit.limit) * 100)}%` : "0%"
+                      width: usageLimit
+                        ? `${Math.min(100, (usageLimit.used / usageLimit.limit) * 100)}%`
+                        : "0%"
                     }}
                   />
                 </div>
@@ -616,7 +611,7 @@ export default function App() {
               </div>
 
               {selectedAgent ? (
-                <div className="detail-card" id="investor">
+                <div className="detail-card">
                   <p>Selected certificate</p>
                   <strong>{selectedAgent.certificate_id}</strong>
                   <span>{selectedAgent.certificate_uri ?? "Artifact persisted in configured storage"}</span>
@@ -627,11 +622,6 @@ export default function App() {
                 <button className="rail-action" onClick={handleExportCompliancePacket}>
                   <ShieldCheck size={15} />
                   <span>Export compliance packet</span>
-                  <ChevronRight size={15} />
-                </button>
-                <button className="rail-action" onClick={handleGenerateInvestorReplay}>
-                  <BookLock size={15} />
-                  <span>Generate investor replay</span>
                   <ChevronRight size={15} />
                 </button>
               </div>

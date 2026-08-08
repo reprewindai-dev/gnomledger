@@ -87,7 +87,7 @@ def _build_app() -> FastAPI:
     
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["https://control.veklom.com", "https://abide.veklom.com"],
+        allow_origins=["https://veklom.com", "https://api.veklom.com"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -117,6 +117,17 @@ def _build_app() -> FastAPI:
     create_mcp_endpoints(app, amphoteric)
 
     @app.middleware("http")
+    async def request_size_limit(request: Request, call_next):
+        if request.headers.get("content-length"):
+            content_length = int(request.headers.get("content-length"))
+            if content_length > 10 * 1024 * 1024:
+                return JSONResponse(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    content={"detail": "Request too large"}
+                )
+        return await call_next(request)
+
+    @app.middleware("http")
     async def request_identity(request: Request, call_next):
         request_id = request.headers.get(settings.request_id_header, secrets.token_urlsafe(12))
         request.state.request_id = request_id
@@ -125,6 +136,14 @@ def _build_app() -> FastAPI:
         response.headers["x-request-id"] = request_id
         response.headers["x-processing-ms"] = str(int((time.perf_counter() - start) * 1000))
         return response
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(_: Request, exc: Exception):
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=ErrorResponse(detail="Internal Server Error").model_dump(),
+        )
 
     @app.exception_handler(ValueError)
     async def handle_value_error(_: Request, exc: ValueError):
@@ -145,7 +164,7 @@ def _build_app() -> FastAPI:
             status="degraded",
             timestamp=utc_now(),
             database="unavailable",
-            detail=getattr(app.state, "database_error", "database unavailable"),
+            detail="database unavailable",
         )
 
     @app.get("/health/ready", tags=["health"], response_model=HealthResponse)
@@ -158,7 +177,7 @@ def _build_app() -> FastAPI:
                 status="error",
                 timestamp=utc_now(),
                 database="unavailable",
-                detail=getattr(app.state, "database_error", "database unavailable"),
+                detail="database unavailable",
             ).model_dump(mode="json"),
         )
 
