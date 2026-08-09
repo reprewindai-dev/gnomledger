@@ -50,7 +50,11 @@ Source code, config examples, or design documents are not proof that these contr
 
 ## Deployment boundary
 
-For the verified Veklom environment, Coolify is deployment/runtime configuration truth. Host port `8000` belongs to Coolify, including its UI/API/MCP listener. Gnomledger may use internal Docker port `8000` behind Traefik without owning host port `8000`.
+Coolify remains the deployment/runtime configuration source of truth, but repository/runtime port contracts still require independent verification before being promoted to `verified_runtime_state`.
+
+For Gnomledger, the canonical reported service port is **8001**. Port **8000 is forbidden** for Gnomledger source, container listeners, Compose/Docker defaults, health checks, examples, and Traefik targets. Do not treat historical Coolify host-port usage or stale deployment artifacts as permission for an internal Gnomledger `8000` fallback.
+
+Runtime port `8001` remains `NOT_VERIFIED` until the deployed commit SHA, HTTP/protocol identity, container listener, and Traefik routing all agree.
 
 ## Compliance language
 
