@@ -1,86 +1,56 @@
-# Deployment & Operations Playbook
+# Project Genome Ledger — Deployment & Operations
 
-## Environments
+> [!IMPORTANT]
+> Read [`../00_VEKLOM_BIBLE.md`](../00_VEKLOM_BIBLE.md) first. Coolify/runtime evidence overrides historical deployment plans.
 
-| Environment | Purpose | Hosting | Notes |
-|-------------|---------|---------|-------|
-| Dev | Internal feature work | Shared EKS namespace | Uses test Stripe keys, Auth0 dev tenant, lower rate limits |
-| Staging | Pre-prod, investor dry runs | Dedicated EKS cluster | Mirrors prod config, runs against Stripe test mode, nightly data reset |
-| Production | Customer & investor demos | Dedicated EKS cluster across 3 AZs | Uses prod Stripe, hardened network policies, autoscaling enabled |
+## Current verified deployment model
 
-All environments use separate AWS accounts with isolated VPCs, security groups, and secrets stores to enforce blast-radius containment.
+For the Veklom production environment verified 2026-08-09:
 
-## Infrastructure Components
+- deployment/runtime configuration authority: **Coolify**;
+- public ingress: **Traefik** on host ports `80/443`;
+- `pgl.veklom.com` is configured to the Gnomledger service on internal Docker port `8001`;
+- `ledger.veklom.com` is configured to the Gnomledger service on internal Docker port `8000`;
+- host port `8000` belongs to Coolify itself and is **not** an application port;
+- GitHub default branch is source truth; a source change is not complete until deployed and live-verified.
 
-- **Kubernetes (EKS/GKE):** Hosts FastAPI app, worker jobs, and Next.js frontend (served via Vercel/CloudFront depending on tier).
-- **PostgreSQL:** Managed RDS with Multi-AZ; read replica for analytics. Parameters tuned for ledger append workloads.
-- **Redis (ElastiCache):** Rate limiting, cache, background job coordination.
-- **Object Storage:** S3 buckets for certificates, ledger exports, backups (Object Lock enabled).
-- **CI/CD:** GitHub Actions → Docker build/push (ECR) → Trivy scan → ArgoCD sync → deployment to cluster.
-- **Networking:** API served via AWS ALB with WAF rules; CloudFront CDN for frontend + certificate downloads.
+`CONFIGURED` routing does not prove application health. Verify the public endpoint after deployment.
 
-## Deployment Workflow
+## Coolify operations
 
-1. **Merge to main** triggers CI pipeline:
-   - Run unit/integration tests (pytest, Playwright).
-   - Static analysis (ruff/mypy) and security scans (Bandit, Trivy).
-   - Build Docker images for backend + worker; tag with Git SHA.
-2. **Artifact promotion**
-   - ArgoCD deploys to staging cluster; smoke tests (health, migration status, API contract) run automatically.
-   - Manual approval (two-person rule) to promote to production.
-3. **Blue/Green Deployments**
-   - New pods deployed alongside old ones; once health checks pass, traffic shifts gradually via ALB weighted target groups.
-4. **Database Migrations**
-   - Alembic jobs run as init containers; backwards-compatible migrations required; destructive changes gated behind feature flags.
+Use Coolify UI/API for deployment and resource mutations. Coolify also exposes an MCP endpoint for AI-assisted infrastructure inspection when enabled and authorized; do not assume a particular MCP mutation capability without checking the current Coolify version/tool permissions.
 
-## Monitoring & Alerting
+Reserve SSH for direct host/container verification or operations that cannot be performed safely through Coolify. Any emergency host-side patch must be reconciled back into GitHub.
 
-- **Metrics:** Prometheus scrapes (latency, error rate, certificate issuance/sec, ledger writes, queue lag). Grafana dashboards per module.
-- **Logging:** Loki stack with structured JSON logs; retention 90 days. Investor demo events mirrored to BigQuery.
-- **Tracing:** OpenTelemetry traces shipped to Tempo; used for debugging slow ledger writes or billing checks.
-- **Alerts:** PagerDuty routing for P1 (API downtime, Stripe webhook failures, chain verification errors); Opsgenie for P2 (quota anomalies).
+## Port ownership
 
-## Scaling Strategy
+Do not choose host-published ports from memory.
 
-- HPA scales FastAPI pods based on CPU + custom metric (requests per second).
-- Ledger ingestion uses SQS workers; scale worker deployments based on queue depth.
-- PostgreSQL read replicas added for analytics; partition ledger tables monthly to keep indexes manageable.
-- Object storage lifecycle moves cold ledger exports to Glacier after 90 days with instant retrieval stored elsewhere.
+- host `80/443` — Traefik ingress;
+- host `8000` — Coolify web/API/MCP listener;
+- internal Docker `8000` — allowed for Gnomledger because it is not the host binding;
+- internal Docker `3000` — used by several services behind Traefik; this does not establish host `3000` as free.
 
-## Cost Controls
+## Deployment completion
 
-- AWS Budgets with alerts at 70/90/100% of forecast.
-- Spot instances for stateless workers in dev/staging; prod uses reserved instances for predictability.
-- Storage lifecycle policies (delete staging data after 14 days, compress logs).
-- Autoscaling ceilings enforced via Terraform to prevent runaway costs.
+A release is complete only after:
 
-## Incident Response & Support
+`repo change → pushed commit → Coolify deployment → live HTTPS/API verification → evidence/report`
 
-1. Detection via alerts or customer ticket.
-2. Triage playbook (docs/operations/runbooks/) determines severity, assigns incident commander.
-3. Communication templates for investors/regulators, including ledger proof attachments.
-4. Post-incident review within 48 hours; action items tracked in Jira and referenced in investor updates.
+Record the repository, branch, commit SHA, changed files, tests, deployment result, live verification, and rollback path.
 
-## Backup & DR
+## Persistence
 
-- Postgres: automated snapshots, PITR enabled; weekly full backups copied to secondary region.
-- S3: Cross-region replication + Object Lock (7-year retention) for ledger data.
-- Redis: daily snapshots stored encrypted.
-- DR drills quarterly: restore full stack into isolated account using Terraform + database snapshots; verify chain integrity.
+Production durability depends on the actual configured database. Do not infer RDS, S3, Redis, EKS, object-lock, multi-region, or backup properties from old design documents. Verify each backing resource in current Coolify/runtime state before documenting it as live.
 
-## Investor Demo Guide
+## Evidence / failure behavior
 
-1. **Pre-demo checklist:**
-   - Staging environment seeded via `scripts/seed_demo.py`.
-   - Investor role enabled with read-only dashboards.
-   - Health dashboard displayed on secondary monitor.
-2. **Demo flow:**
-   - Issue new certificate via UI; highlight Stripe charge logs.
-   - Show ledger timeline and lineage tree for Alpha/Beta.
-   - Trigger incident entry and demonstrate immutable log + alert.
-   - Display ARR dashboard sourced from real billing usage.
-3. **Post-demo:**
-   - Reset staging data (script) to maintain consistency.
-   - Send investors ledger verification link and summary PDF.
+- No silent demo fallback.
+- No seeded investor data in production evidence.
+- A chain write is not the same as chain verification.
+- A hash chain is tamper-evident; external finality must be independently proven.
+- If a dependency or database is unavailable, expose the failure honestly rather than substituting a demo state.
 
-This playbook ensures consistent, secure deployments and polished investor experiences while maintaining operational rigor.
+## Historical deployment plan
+
+The old AWS/EKS/investor-demo playbook is `ARCHIVED`; see [`archive/2026-08-09/deployment-operations.md`](./archive/2026-08-09/deployment-operations.md).
