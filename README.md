@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> **VEKLOM BIBLE — READ FIRST:** [`00_VEKLOM_BIBLE.md`](./00_VEKLOM_BIBLE.md)
+> Project Genome Ledger is both a standalone product and a reusable Veklom evidence/provenance capability domain. The Bible controls cross-repo/runtime truth.
+
 # Project Genome Ledger (PGL)
 
 Project Genome Ledger is a production-ready control plane for:
