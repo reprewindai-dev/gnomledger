@@ -1,108 +1,75 @@
-# System Architecture Blueprint
+# Project Genome Ledger — Current Architecture
 
-## Stack Overview
+> [!IMPORTANT]
+> Cross-repo architecture/runtime truth lives in [`../00_VEKLOM_BIBLE.md`](../00_VEKLOM_BIBLE.md). This file describes Genome Ledger’s repository/domain architecture only.
 
-| Layer | Technology | Notes |
-|-------|------------|-------|
-| Frontend | React 18, TypeScript, Vite, custom CSS, lucide-react | Control plane, certificate viewer, lineage explorer, investor replay mode |
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Pydantic v2 | Modular services for registry, ledger, lineage, billing, and admin |
-| Persistence | PostgreSQL or SQLite (dev), SQLAlchemy 2.0 | Persistent agent, certificate, ledger, lineage, and billing state |
-| Billing | Stripe Webhooks + internal usage accounting | Enforces issuance and metered usage policies |
-| Auth | API keys validated server-side | RBAC enforced at route and service layer |
-| Observability | Python logging, request IDs, processing time headers | Operational traceability for deployed API calls |
-| Infra | Vercel, Docker, docker-compose | Free-tier deploy target plus container option |
+## Product boundary
 
-## Service Modules
+Project Genome Ledger is both:
 
-1. **Registry Service**
-   - Endpoints: `/agents`
-   - Responsible for birth certificate issuance, genome storage, and parent linkage.
-2. **Ledger Service**
-   - Endpoints: `/ledger/events`, `/ledger/agents/{agent_id}`, `/ledger/agents/{agent_id}/verify`
-   - Writes append-only events with hash chaining and exposes chain verification.
-3. **Lineage Service**
-   - Endpoints: `/lineage/tree/{agent_id}`, `/lineage/fork`
-   - Builds ancestry trees from parent-child relationships.
-4. **Billing Service**
-   - Endpoints: `/billing/usage`, `/billing/usage/{metric}/limit`, `/billing/stripe/webhook`
-   - Tracks usage, plan limits, and Stripe webhook ingestion.
-5. **Analytics Service**
-   - Aggregates usage and investor/demo-facing summary views.
-6. **Admin Service**
-   - Provides bootstrap and API key management.
+1. a standalone product with its own Registry / Certificates / Ledger / Lineage / Billing experience; and
+2. a reusable Veklom evidence, provenance, lineage, and verification capability domain.
 
-All services run inside the FastAPI application and share common authentication, database, logging, and request-ID middleware.
+Capability OS does not embed the standalone Genome Ledger UI wholesale. It consumes the underlying capabilities and presents them through Veklom-native surfaces.
 
-## Data Model
+## Repository stack
 
-- `accounts`: organizations and plan tier
-- `users`: account users with role assignments
-- `api_keys`: scoped access keys for authenticated access
-- `agents`: core identity records
-- `genome_versions`: versioned genome payloads hashed for integrity
-- `certificates`: birth certificate metadata
-- `ledger_events`: append-only events with `prev_event_hash` and `event_hash`
-- `lineage_edges`: parent-child links for ancestry reconstruction
-- `billing_usage`: metered usage records and period windows
+| Layer | Current repository role |
+|---|---|
+| Frontend | React/TypeScript product surface for registry, certificate, ledger, lineage, billing, and verification views |
+| Backend | FastAPI + SQLAlchemy + Pydantic service boundary |
+| Persistence | Database-backed agent, certificate, genome, ledger, lineage, and billing state |
+| Auth | Server-side API-key/RBAC contracts |
+| Evidence | Append-only/hash-linked ledger records with explicit verification endpoints |
+| Deployment | Container and other packaging assets exist in source; **current production placement must be read from Coolify/runtime evidence, not inferred from packaging files** |
 
-## API Surface
+## Service domains
 
-### Registry
+- **Registry** — agent/asset registration and certificate issuance.
+- **Genome** — versioned genome/capability-state payloads.
+- **Ledger** — event append, read, and chain verification.
+- **Lineage** — parent/child ancestry and forks.
+- **Billing** — usage/limit accounting and payment-webhook integration where configured.
+- **Admin/Auth** — bootstrap, API keys, roles, and authorization.
+- **Integration** — Veklom snapshot/evidence interfaces.
 
-- `POST /api/v1/agents`: Create agent and issue birth certificate
-- `GET /api/v1/agents`: List account agents
-- `GET /api/v1/agents/{agent_id}`: Fetch certificate and genome snapshot
-- `GET /api/v1/agents/{agent_id}/certificate`: Read certificate artifact metadata
-- `PATCH /api/v1/agents/{agent_id}/genome`: Submit a genome update
+## Evidence semantics
 
-### Ledger
+A persisted event is not automatically the same thing as independently verified evidence.
 
-- `POST /api/v1/ledger/events`: Append deployment, audit, incident, or custom events
-- `GET /api/v1/ledger/agents/{agent_id}`: Read event history
-- `GET /api/v1/ledger/agents/{agent_id}/verify`: Validate chain integrity
+- Hash-linked records provide **tamper evidence**.
+- `/verify`-style checks establish chain integrity only to the extent the implementation actually validates it.
+- External anchoring/finality must be separately proven against the authoritative external system.
+- Demo or seeded events may never be mixed into production evidence without an explicit `DEMO` boundary.
 
-### Lineage
+## Runtime / deployment truth
 
-- `POST /api/v1/lineage/fork`: Fork an agent and inherit genome ancestry
-- `GET /api/v1/lineage/tree/{agent_id}`: Read the ancestry tree
+Verified 2026-08-09 Coolify dynamic routing shows:
 
-### Billing
+- `pgl.veklom.com` configured to Gnomledger internal port `8001`.
+- `ledger.veklom.com` configured to Gnomledger internal port `8000`.
 
-- `GET /api/v1/billing/usage`: Read current usage
-- `GET /api/v1/billing/usage/{metric}/limit`: Read quota and remaining allowance
-- `POST /api/v1/billing/stripe/webhook`: Receive Stripe webhook events
+These are internal Docker service ports behind Traefik. **Host port `8000` is reserved by Coolify itself**, including the Coolify UI/API/MCP surface, and must not be allocated directly to the application.
 
-### Admin
+Configured routing is not by itself a health guarantee. Verify the live endpoint before making a production-health claim.
 
-- `POST /api/v1/admin/bootstrap`: Initialize the first account and owner key
-- `POST /api/v1/admin/accounts/{account_id}/keys`: Create API keys
-- `GET /api/v1/admin/accounts/{account_id}/keys`: List API keys
-- `DELETE /api/v1/admin/accounts/{account_id}/keys/{api_key_id}`: Revoke API keys
+## No investor-demo fallback
 
-## Auth & RBAC
+The old Investor Mode / investor replay fallback architecture is retired. If authoritative backend data is unavailable, the production UI must fail explicitly or display an unavailable/unverified state. It must not silently substitute bundled demo data.
 
-- API key authentication is the active contract for protected routes.
-- Active roles: `owner`, `admin`, `operator`, `viewer`
-- Route-level dependencies enforce read/write privileges.
-- Agent issuance requires `operator`, `admin`, or `owner`.
+## API contract
 
-## Observability & Logging
+Use current route source and generated OpenAPI for detailed endpoint truth. Major families include:
 
-- Logging is configured centrally in the FastAPI app.
-- Each request receives an `x-request-id`.
-- Responses include `x-processing-ms`.
-- Ledger verification and billing usage provide the main operational integrity signals.
+- `/api/v1/admin/*`
+- `/api/v1/agents*`
+- `/api/v1/ledger/*`
+- `/api/v1/lineage/*`
+- `/api/v1/billing/*`
+- `/api/v1/integrations/*`
 
-## Infrastructure & Reliability
+Do not copy exact behavior from archived docs when it differs from current source.
 
-- **Environments:** local, preview, and production deployments are supported.
-- **CI/CD:** git push to Vercel is the active hosted deployment path.
-- **Backups:** production durability depends on the configured backing database provider.
-- **Secrets Management:** environment variables drive deployment-time configuration.
-- **Rate Limiting:** not yet implemented as a dedicated middleware layer.
+## Historical architecture
 
-## Scaling Considerations
-
-- Service logic is already separated into modules for later extraction if the system is split.
-- The API contract is stable enough to serve as a VEKLM module boundary.
-- Export artifacts provide a clean bridge into other control-plane systems.
+The previous Vercel/demo-oriented architecture is `ARCHIVED`; see [`archive/2026-08-09/architecture.md`](./archive/2026-08-09/architecture.md).
