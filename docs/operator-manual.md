@@ -1,233 +1,65 @@
-# PGL Operator Manual
+# PGL Operator Manual — Current
 
-## Objective
+> [!IMPORTANT]
+> Read [`../00_VEKLOM_BIBLE.md`](../00_VEKLOM_BIBLE.md) first. The Bible controls cross-repo architecture, runtime truth, deployment ownership, host-port reservations, and evidence language.
 
-Operate Project Genome Ledger as a deployable module that issues AI agent birth certificates, records lifecycle evidence, exposes lineage, and exports compliance artifacts.
+## Product boundary
 
-This manual documents the system as it exists in this repository today.
+Project Genome Ledger is a standalone product and a reusable Veklom evidence/provenance/lineage capability domain. Its standalone Registry/Certificates/Ledger/Lineage UI is not embedded wholesale into Capability OS; Capability OS consumes the underlying capabilities and renders a Veklom-native experience.
 
-## System Components
+## Runtime rule
 
-- Frontend control plane: React + Vite app in `src/`
-- API service: FastAPI app in `backend/app/`
-- Deployment entrypoint: `api/index.py`
-- Database-backed service modules:
-  - admin bootstrap and API keys
-  - agent registration and certificate issuance
-  - genome versioning
-  - append-only ledger history
-  - lineage trees and forks
-  - billing usage and quota checks
+There is **no silent Investor Demo fallback** in the current operating doctrine. If the live registry/API is unreachable, surface the failure explicitly. Demo fixtures may exist only when isolated and unmistakably labeled `DEMO`.
 
-## Execution Flow
+Current configured Coolify routing verified 2026-08-09 includes:
 
-### 1. Bootstrap the registry
+- `pgl.veklom.com` → Gnomledger service internal port `8001`
+- `ledger.veklom.com` → Gnomledger service internal port `8000`
 
-This is the one-time initialization step for a fresh deployment.
+These are **internal Docker ports behind Traefik**. Host port `8000` belongs to Coolify itself and must not be allocated directly to an application.
 
-1. Submit the bootstrap token, account name, and owner identity.
-2. `POST /api/v1/admin/bootstrap` validates the bootstrap token.
-3. The API creates the first account.
-4. The API creates the first owner user.
-5. The API issues the first owner API key.
-6. The frontend stores that key in browser local storage and uses it for protected calls.
+`CONFIGURED` routing is not a health claim. Re-check the live endpoints before saying the service is healthy.
 
-Result:
+## Core operator flow
 
-- The registry is initialized.
-- The operator session becomes authenticated.
-- Birth certificate issuance is unlocked.
+1. Bootstrap a fresh registry only when bootstrap is actually required and authorized.
+2. Use an authorized API key for protected calls.
+3. Create/issue the asset through the current `POST /api/v1/agents` contract.
+4. Read the persisted asset back through the current agent, ledger, verification, and lineage routes.
+5. Verify the ledger chain instead of assuming a successful write equals cryptographic verification.
+6. Export only data returned from the authoritative runtime. Do not add demo data to a production export.
 
-### 2. Issue an agent birth certificate
+## Primary API families
 
-This is the core "bring an agent to life" flow.
+Current repository API surface includes:
 
-Inputs:
+- admin bootstrap/key management
+- agent issue/read/certificate/genome update
+- ledger event append/read/verification
+- lineage fork/tree
+- billing usage/limits/webhook
+- Veklom integration snapshot
 
-- `agent_name`
-- `creator`
-- `jurisdiction`
-- `genome`
-  - model family
-  - model version
-  - architecture
-  - tools
-  - permissions
-  - safety rules
-  - runtime config
-  - intended use
-  - risk category
-- `parent_agent_ids` if the agent descends from other agents
+Use current route code and generated OpenAPI as the detailed contract; do not copy endpoint behavior from archived docs when source has changed.
 
-System behavior:
+## Evidence language
 
-1. The frontend sends `POST /api/v1/agents`.
-2. The backend validates the payload with `AgentCreateRequest`.
-3. The billing service checks whether issuance quota still exists.
-4. The certificate service creates:
-   - the agent record
-   - the initial genome version
-   - the certificate record
-   - the birth ledger event
-5. The API returns the new `agent_id`, `certificate_id`, and live state.
+Distinguish persisted records from verified cryptographic evidence. Hash chaining is tamper-evident. Stronger claims such as external finality, physical immutability, or on-chain anchoring require independent verification of the exact record/anchor.
 
-Result:
+## Failure rules
 
-- The agent now exists as a first-class asset in the registry.
-- Its history is part of the append-only ledger.
-- Its ancestry is available in lineage views.
+- Authentication failure stays a failure.
+- Validation failure stays a failure.
+- Quota/payment failure stays a failure.
+- Backend unavailability stays an explicit unavailable/error state.
+- Never replace any of those states with bundled investor/demo content.
 
-### 3. Review the issued asset
+## Deployment operations
 
-After issuance, the console reads back the asset through:
+Coolify is deployment/runtime configuration truth for the verified Veklom environment. Use Coolify UI/API/MCP for Coolify resource management. Reserve SSH for direct host/container verification or operations that cannot be performed safely through Coolify.
 
-- `GET /api/v1/agents`
-- `GET /api/v1/ledger/agents/{agent_id}`
-- `GET /api/v1/ledger/agents/{agent_id}/verify`
-- `GET /api/v1/lineage/tree/{agent_id}`
-- `GET /api/v1/billing/usage`
-- `GET /api/v1/billing/usage/{metric}/limit`
+Do not document a Vercel URL as production truth unless it has been independently reverified as the active deployment.
 
-UI meaning:
+## Historical manual
 
-- `Registry`: issued agents for the active account
-- `Certificates`: identity and genome details
-- `Ledger`: append-only event stream
-- `Lineage`: parent-child ancestry tree
-- `Billing`: usage and quota state
-- `Investor Mode`: replay/export surface
-
-### 4. Export artifacts
-
-The frontend supports two export actions.
-
-#### Export compliance packet
-
-Downloads a JSON packet containing:
-
-- export timestamp
-- live vs replay mode
-- selected agent
-- ledger events
-- lineage tree
-- chain verification status
-- usage limit snapshot
-
-#### Generate investor replay
-
-Downloads a JSON replay bundle containing:
-
-- export timestamp
-- selected agent ID
-- demo bundle
-- current selected agent
-- current ledger view
-- current lineage view
-
-## How an Agent Gets Its Birth Certificate
-
-### Through the app
-
-1. Open the production control plane.
-2. If the registry is new, complete bootstrap first.
-3. Fill in the agent identity and genome fields.
-4. Click `Issue Birth Certificate`.
-5. The frontend submits `POST /api/v1/agents`.
-6. The backend persists the agent, genome, certificate, and birth ledger event.
-7. The new agent appears in the registry and becomes selectable for ledger and lineage inspection.
-
-### Through the API
-
-Use an owner, admin, or operator API key in the `x-api-key` header.
-
-```bash
-curl -X POST https://pgl-dksummers-projects.vercel.app/api/v1/agents \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_OWNER_OR_OPERATOR_KEY" \
-  -d '{
-    "agent_name": "Sentinel-Prime",
-    "creator": "VEKLM Operations",
-    "jurisdiction": "CA-ON",
-    "genome": {
-      "model_family": "gpt",
-      "model_version": "5",
-      "architecture": "tool-using-agent",
-      "tools": ["crm", "browser", "email"],
-      "permissions": ["read:crm", "write:tasks"],
-      "safety_rules": ["human-review-for-payments", "no-unapproved-data-export"],
-      "runtime_config": {
-        "temperature": 0.2,
-        "max_steps": 12
-      },
-      "intended_use": "Customer operations and task execution",
-      "risk_category": "medium"
-    },
-    "parent_agent_ids": []
-  }'
-```
-
-Verify creation:
-
-```bash
-curl -H "x-api-key: YOUR_OWNER_OR_OPERATOR_KEY" \
-  https://pgl-dksummers-projects.vercel.app/api/v1/agents
-```
-
-Verify chain integrity:
-
-```bash
-curl -H "x-api-key: YOUR_OWNER_OR_OPERATOR_KEY" \
-  https://pgl-dksummers-projects.vercel.app/api/v1/ledger/agents/AGENT_ID/verify
-```
-
-## Interfaces / APIs
-
-- Auth header: `x-api-key`
-- Roles that can issue agents: `operator`, `admin`, `owner`
-
-Primary routes:
-
-- `POST /api/v1/admin/bootstrap`
-- `POST /api/v1/agents`
-- `GET /api/v1/agents`
-- `GET /api/v1/agents/{agent_id}`
-- `GET /api/v1/agents/{agent_id}/certificate`
-- `PATCH /api/v1/agents/{agent_id}/genome`
-- `POST /api/v1/ledger/events`
-- `GET /api/v1/ledger/agents/{agent_id}`
-- `GET /api/v1/ledger/agents/{agent_id}/verify`
-- `POST /api/v1/lineage/fork`
-- `GET /api/v1/lineage/tree/{agent_id}`
-- `GET /api/v1/billing/usage`
-- `GET /api/v1/billing/usage/{metric}/limit`
-- `GET /api/v1/integrations/vekml/agents/{agent_id}/snapshot`
-
-## State & Data Handling
-
-- Session key is stored in browser local storage under `pgl-session`.
-- Live mode uses the stored API key for backend requests.
-- Investor demo mode falls back to bundled local data when the live registry is unreachable.
-- Export artifacts are generated client-side as JSON downloads.
-
-## Failure & Degradation Rules
-
-- Invalid bootstrap token: `403`
-- Bootstrap already completed: `409`
-- Missing API key: protected routes reject the request
-- Invalid payload: `400`
-- Issuance quota exhausted: `402`
-- Live backend unreachable: UI falls back to local investor replay data
-
-## Constraints
-
-- Protected routes require a valid API key.
-- The current UI does not expose API key creation and revocation controls.
-- The current UI exports JSON evidence, not signed PDF certificates.
-- The current deployment is protected by Vercel authentication in front of the app.
-
-## Deployment Notes
-
-- Production app: `https://pgl-dksummers-projects.vercel.app`
-- Health endpoint: `https://pgl-dksummers-projects.vercel.app/health`
-- Frontend and backend are deployed together on Vercel.
-- Persistent production state depends on the configured database connection.
+The previous demo/Vercel-oriented manual is `ARCHIVED`; see [`archive/2026-08-09/operator-manual.md`](./archive/2026-08-09/operator-manual.md).
