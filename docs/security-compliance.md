@@ -1,59 +1,68 @@
-# Security & Compliance Hardening
+# Project Genome Ledger — Security & Compliance Posture
 
-## Threat Model Summary
+> [!IMPORTANT]
+> Read [`../00_VEKLOM_BIBLE.md`](../00_VEKLOM_BIBLE.md) first. Security and compliance claims must be proven at the exact layer being described.
 
-1. **Ledger Tampering:** Adversary attempts to rewrite or delete lifecycle events. Mitigation: append-only hash chain, S3 Object Lock, periodic notarization.
-2. **Unauthorized Access:** Compromised credentials gaining access to sensitive agent data. Mitigation: SSO + MFA, RBAC, IP allowlists, short-lived tokens, anomaly detection.
-3. **Billing Abuse:** Bypassing quota enforcement to issue certificates for free. Mitigation: pre-flight billing service checks, signed usage records, Stripe webhook reconciliation.
-4. **Data Leakage:** Sensitive genome/runtime configs exfiltrated. Mitigation: encryption at rest, field-level encryption for secrets, DLP scanning, zero-trust service to service.
-5. **Incident Suppression:** Operator attempts to hide an incident. Mitigation: immutable incident log, requirement for dual approval to delete/comment, investor-facing alerts on suspicious gaps.
+## What may be claimed from repository behavior
 
-## Security Controls
+Only claim controls that current source/tests/runtime evidence demonstrate. Current core security/evidence concepts include:
 
-### Identity & Access Management
-- **SSO + MFA** via Auth0/Okta for all human users; SCIM provisioning for enterprises.
-- **Service Accounts** use mTLS certificates stored in AWS Secrets Manager with automatic rotation.
-- **RBAC Policies** enforce minimum privileges; policy engine denies ledger mutation without `operator` scope.
-- **Investor Demo Role** has read-only access to curated views without access to raw genome configs.
+- authenticated protected routes using the implemented API-key/RBAC model;
+- persisted ledger records with hash-linking/chain verification behavior;
+- database-backed identity, genome, certificate, ledger, lineage, and billing state;
+- server-side validation and authorization where implemented;
+- explicit failure rather than silent production demo fallback.
 
-### Data Protection
-- **Encryption at Rest:** Postgres (AWS KMS), S3 (SSE-KMS), Redis TLS.
-- **Encryption in Transit:** TLS 1.3 everywhere, HSTS enforced, API response signing option for auditors.
-- **Field-Level Protection:** Sensitive genome parameters stored using envelope encryption; decrypt on access with audit logging.
+Use current source and tests to determine the exact implementation before making a customer-facing claim.
 
-### Ledger Integrity
-- Each event stores `prev_hash` and `event_hash`; nightly job notarizes root hash to external transparency service (e.g., OpenTimestamps or notarized email) for independent verification.
-- Write path enforces idempotency keys to prevent replay attacks.
-- Verification endpoint recalculates chain and emits alert on mismatch; Prometheus alert triggers PagerDuty.
+## Evidence semantics
 
-### Compliance Alignment
-- **EU AI Act / NIST AI RMF:** evidence artifacts generated via PDF exports referencing ledger event IDs.
-- **SOC 2 / ISO 27001:** change management logs, access reviews, automated evidence collection via Drata/ConductorOne integration.
-- **GDPR/PII:** data minimization, regional storage requirements enforced, right-to-erasure applied only to personal metadata (ledger remains but references anonymized).
+- **Hash-linked** means tamper-evident; it does not mean physically undeletable.
+- **Verified chain** means the implemented verification procedure passed; it does not automatically prove external anchoring or legal non-repudiation.
+- **External finality** requires verification against the authoritative external anchor/system.
+- **Compliance evidence** is not the same thing as certification.
 
-### Monitoring & Incident Response
-- SIEM ingestion (Loki → Splunk/Datadog) with detection rules for abnormal API key usage.
-- Incident runbooks stored in `docs/operations/runbooks/` (future) with on-call rotation via PagerDuty.
-- Incident logs automatically notify designated auditors; tamper detection if response not acknowledged within SLA.
+## Claims that require separate proof
 
-### Backup & Recovery
-- Postgres PITR with hourly snapshots retained 35 days.
-- Ledger S3 bucket uses Object Lock (compliance mode) with 7-year retention; cross-region replication for DR.
-- Quarterly restore drills validated via automated Terraform workspace.
+Do not claim the following unless independently verified in the deployed environment:
 
-### Key & Secret Management
-- AWS KMS per environment; customer-managed keys option for Enterprise tier.
-- Secrets stored in AWS Secrets Manager, rotated via Lambda; injected into pods via CSI driver.
-- Stripe webhook signing secret rotated quarterly with automated test harness.
+- SOC 2 Type II certification or compliance;
+- ISO 27001 certification;
+- HIPAA compliance;
+- FIPS validation;
+- S3 Object Lock / WORM retention;
+- AWS KMS / Secrets Manager / RDS / EKS / ArgoCD controls;
+- HSM, SGX, TDX, or hardware-enclave protection;
+- SSO/SCIM/Okta/Auth0 deployment;
+- SIEM/PagerDuty/Splunk/Datadog integration;
+- multi-region DR/PITR/backup retention;
+- TLS 1.3 “everywhere”;
+- external notarization or on-chain finality.
 
-## Tamper Evidence & Auditability
-- Every admin action recorded in `audit_log` table with cryptographic signature.
-- Audit exports include Merkle proofs for ledger subsets, enabling third parties to validate without full data access.
-- Frontend surfaces integrity indicators (green for verified chain, amber for pending validation) on investor dashboards.
+Source code, config examples, or design documents are not proof that these controls are active.
 
-## Policy & Governance
-- **Change Management:** GitOps + pull request approvals required for production changes; ArgoCD audit trail retained.
-- **Vendor Management:** Third-party risk reviews for Auth0, Stripe, hosting provider.
-- **User Education:** Security banners in UI, inline prompts for incident logging best practices, quarterly policy acknowledgement.
+## Secret handling
 
-These controls collectively meet the SecEd enforcement standard defined in the global directive and provide investors with confidence that PGL enforces serious accountability.
+- Never commit production secrets.
+- Use deployment secret management for runtime values.
+- Never print tokens/private keys in logs, issues, reports, or chat.
+- Verify key-management properties at the actual implementation boundary; do not infer hardware isolation from naming.
+
+## Deployment boundary
+
+For the verified Veklom environment, Coolify is deployment/runtime configuration truth. Host port `8000` belongs to Coolify, including its UI/API/MCP listener. Gnomledger may use internal Docker port `8000` behind Traefik without owning host port `8000`.
+
+## Compliance language
+
+Prefer precise statements such as:
+
+- “the ledger exposes a chain-verification endpoint”;
+- “this event is persisted and its hash chain verifies”;
+- “this control is configured but not independently verified”;
+- “this capability can produce evidence relevant to an audit.”
+
+Avoid statements that a product “meets” or is “compliant with” a regulation/standard unless the legal/operational requirements and evidence actually support that conclusion.
+
+## Historical document
+
+The old AWS/enterprise-control security document is `ARCHIVED`; see [`archive/2026-08-09/security-compliance.md`](./archive/2026-08-09/security-compliance.md).
