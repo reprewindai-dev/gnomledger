@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pgl.veklom.com/schemas/PGLIdentity.schema.json",
+  "title": "PGLIdentity",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier (e.g. DID)"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["Agent", "Human", "Organization", "Service", "Controller"]
+    },
+    "public_keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "publicKeyJwk": { "type": "object" }
+        },
+        "required": ["id", "type", "publicKeyJwk"]
+      }
+    },
+    "controller": {
+      "type": "string",
+      "description": "DID of the controller"
+    }
+  },
+  "required": ["id", "type", "public_keys"],
+  "examples": [
+    {
+      "id": "did:web:agent.example.com",
+      "type": "Agent",
+      "public_keys": [
+        {
+          "id": "did:web:agent.example.com#key-1",
+          "type": "JsonWebKey2020",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPxgmXy"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pgl.veklom.com/schemas/PGLLineage.schema.json",
+  "title": "PGLLineage",
+  "type": "object",
+  "properties": {
+    "lineage_id": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node_type": { "type": "string", "enum": ["Organization", "Principal", "Agent", "Delegation", "ExecutionIdentity", "Capability", "Operation", "Evidence"] },
+          "ref_id": { "type": "string" }
+        },
+        "required": ["node_type", "ref_id"]
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "relation": { "type": "string" }
+        },
+        "required": ["from", "to", "relation"]
+      }
+    }
+  },
+  "required": ["lineage_id", "nodes", "edges"],
+  "examples": [
+    {
+      "lineage_id": "lin-001",
+      "nodes": [
+        { "node_type": "Principal", "ref_id": "did:web:corp.example.com" },
+        { "node_type": "Agent", "ref_id": "did:web:agent.example.com" },
+        { "node_type": "Delegation", "ref_id": "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6" }
+      ],
+      "edges": [
+        { "from": "did:web:corp.example.com", "to": "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6", "relation": "issues" },
+        { "from": "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6", "to": "did:web:agent.example.com", "relation": "delegates_to" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pgl.veklom.com/schemas/PGLDelegation.schema.json",
+  "title": "PGLDelegation",
+  "type": "object",
+  "properties": {
+    "delegation_id": { "type": "string" },
+    "principal": { "type": "string" },
+    "delegate": { "type": "string" },
+    "scope": { "type": "string" },
+    "capability": { "type": "string" },
+    "resource": { "type": "string" },
+    "budget": { "type": "string" },
+    "valid_from": { "type": "string", "format": "date-time" },
+    "valid_until": { "type": "string", "format": "date-time" },
+    "delegation_depth": { "type": "integer", "minimum": 0 },
+    "signature": { "type": "string" }
+  },
+  "required": ["delegation_id", "principal", "delegate", "scope", "capability", "valid_from", "valid_until", "signature"],
+  "examples": [
+    {
+      "delegation_id": "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+      "principal": "did:web:corp.example.com",
+      "delegate": "did:web:agent.example.com",
+      "scope": "execution",
+      "capability": "urn:veklom:cap:deploy",
+      "resource": "arn:aws:ec2:region:account:instance/instance-id",
+      "budget": "100.00 USD",
+      "valid_from": "2026-08-10T00:00:00Z",
+      "valid_until": "2026-08-11T00:00:00Z",
+      "delegation_depth": 1,
+      "signature": "eyJhbGciOiJFZERTQSIsImI2NCI6ZmFsc2UsImNyaXQiOlsiYjY0Il19..sig_value"
+    }
+  ]
+}

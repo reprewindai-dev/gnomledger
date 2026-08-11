@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pgl.veklom.com/schemas/PGLEvidenceEnvelope.schema.json",
+  "title": "PGLEvidenceEnvelope",
+  "type": "object",
+  "properties": {
+    "evidence_id": { "type": "string" },
+    "execution_id": { "type": "string" },
+    "authority_ref": { "type": "string" },
+    "capability": { "type": "string" },
+    "input_hash": { "type": "string" },
+    "output_hash": { "type": "string" },
+    "policy_ref": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "settlement_ref": { "type": "string" },
+    "measurement_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "signature": { "type": "string" }
+  },
+  "required": ["evidence_id", "execution_id", "authority_ref", "capability", "input_hash", "output_hash", "timestamp", "signature"],
+  "examples": [
+    {
+      "evidence_id": "ev-001",
+      "execution_id": "exec-12345",
+      "authority_ref": "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+      "capability": "urn:veklom:cap:deploy",
+      "input_hash": "sha256:d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2",
+      "output_hash": "sha256:e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+      "policy_ref": "policy-402",
+      "timestamp": "2026-08-10T12:05:00Z",
+      "settlement_ref": "tx-99999",
+      "measurement_refs": ["vnp-measure-1"],
+      "signature": "signature_by_ephemeral_key"
+    }
+  ]
+}
