@@ -3,18 +3,19 @@
 > [!IMPORTANT]
 > Read [`../00_VEKLOM_BIBLE.md`](../00_VEKLOM_BIBLE.md) first. Coolify/runtime evidence overrides historical deployment plans.
 
-## Current verified deployment model
+## Current deployment model
 
-For the Veklom production environment verified 2026-08-09:
+For the Veklom production environment, the repository records the following **reported** deployment contract:
 
 - deployment/runtime configuration authority: **Coolify**;
-- public ingress: **Traefik** on host ports `80/443`;
-- `pgl.veklom.com` is configured to the Gnomledger service on internal Docker port `8001`;
-- `ledger.veklom.com` is configured to the Gnomledger service on internal Docker port `8000`;
-- host port `8000` belongs to Coolify itself and is **not** an application port;
-- GitHub default branch is source truth; a source change is not complete until deployed and live-verified.
+- public ingress is expected through Traefik;
+- Gnomledger/PGL canonical service port: **8001**;
+- ports **3000** and **8000** are forbidden as Gnomledger application listeners, Docker/Compose defaults, health-check targets, examples, or Traefik service targets;
+- GitHub default branch is source truth for the intended application contract, but a source change is not runtime verification.
 
-`CONFIGURED` routing does not prove application health. Verify the public endpoint after deployment.
+`reported_runtime_state` is not `verified_runtime_state`. Do not describe `pgl.veklom.com`, `ledger.veklom.com`, or any other public route as correctly routed merely because configuration or historical deployment notes say so.
+
+Runtime port `8001` remains `NOT_VERIFIED` until the deployed commit SHA, HTTP/protocol identity, container listener, and Traefik routing all agree. cAPI registration must be verified separately after cAPI itself is verified.
 
 ## Coolify operations
 
@@ -24,12 +25,13 @@ Reserve SSH for direct host/container verification or operations that cannot be 
 
 ## Port ownership
 
-Do not choose host-published ports from memory.
+Do not choose application ports from memory or from historical host/container mappings.
 
-- host `80/443` — Traefik ingress;
-- host `8000` — Coolify web/API/MCP listener;
-- internal Docker `8000` — allowed for Gnomledger because it is not the host binding;
-- internal Docker `3000` — used by several services behind Traefik; this does not establish host `3000` as free.
+- Gnomledger canonical application port — `8001`;
+- forbidden Gnomledger application ports — `3000`, `8000`;
+- any infrastructure/control-plane listener outside the Gnomledger application contract must not be reused as evidence that Gnomledger is allowed to listen on a forbidden port.
+
+A public route is not verified until its Traefik service target resolves to the canonical Gnomledger listener on `8001` and the returned HTTP/protocol identity matches the deployed Gnomledger commit.
 
 ## Deployment completion
 
