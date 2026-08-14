@@ -65,15 +65,21 @@ async def lifespan(app: FastAPI):
 
     database_task = asyncio.create_task(initialize_database_until_ready())
 
-    from backend.app.services.capi_registration import register_with_capi
+    from backend.app.services.capi_registration import maintain_capi_registration
 
-    capi_task = asyncio.create_task(register_with_capi(get_settings()))
+    capi_stop = asyncio.Event()
+    capi_task = asyncio.create_task(maintain_capi_registration(get_settings(), capi_stop))
 
     try:
         yield
     finally:
+        capi_stop.set()
         if not capi_task.done():
             capi_task.cancel()
+        try:
+            await capi_task
+        except asyncio.CancelledError:
+            pass
         if not database_task.done():
             database_task.cancel()
             try:
