@@ -50,7 +50,7 @@ def _headers(settings: Settings) -> dict[str, str]:
 def _registration_payload() -> dict[str, object]:
     return {
         "service_name": "gnomledger",
-        "capabilities": ["pgl_ledger", "x402_settlement", "verification"],
+        "capabilities": ["pgl_ledger", "verification"],
         "telemetry_supported": True,
     }
 
