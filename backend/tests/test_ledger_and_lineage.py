@@ -16,6 +16,17 @@ def test_vercel_python_runtime_matches_the_locked_project_version() -> None:
     assert (repository_root / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
 
 
+def test_vercel_uses_the_database_driver_selected_by_runtime_code() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    requirements = (repository_root / "requirements.txt").read_text(encoding="utf-8")
+    project = (repository_root / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert "psycopg[binary]==3.3.4" in requirements
+    assert '"psycopg[binary]==3.3.4"' in project
+    assert "psycopg2-binary" not in requirements
+    assert "psycopg2-binary" not in project
+
+
 def _seed_account(session, tier="launch"):
     account = models.Account(name=f"acct-{short_id('acc')}", tier=tier)
     session.add(account)
