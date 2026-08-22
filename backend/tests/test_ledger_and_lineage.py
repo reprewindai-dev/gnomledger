@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app import models
 from app.schemas import AgentCreateRequest, GenomePayload, LedgerEventCreate
 from app.services.certificate_service import CertificateService
 from app.services.ledger_service import LedgerService
 from app.services.lineage_service import LineageService
 from app.utils import short_id
+
+
+def test_vercel_python_runtime_matches_the_locked_project_version() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+
+    assert (repository_root / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
 
 
 def _seed_account(session, tier="launch"):
