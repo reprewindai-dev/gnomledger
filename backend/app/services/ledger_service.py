@@ -262,7 +262,9 @@ class LedgerService:
                 "last_event_at": last_event_at,
                 "latest_event_hash": latest_hash,
                 "errors": errors,
-                "reason": "Ledger chain verified." if not errors else "Ledger chain verification failed.",
+                "reason": (
+                    "Ledger chain verified." if not errors else "Ledger chain verification failed."
+                ),
             },
         )
 
