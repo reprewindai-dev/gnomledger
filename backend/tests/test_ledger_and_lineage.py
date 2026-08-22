@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from app import models
-from app.schemas import AgentCreateRequest, GenomePayload, LedgerEventCreate
+from app.dependencies import get_db
+from app.main import create_app
+from app.schemas import AgentCreateRequest, ApiKeyCreateRequest, GenomePayload, LedgerEventCreate
 from app.services.certificate_service import CertificateService
+from app.services.key_service import ApiKeyService
 from app.services.ledger_service import LedgerService
 from app.services.lineage_service import LineageService
 from app.utils import short_id
@@ -113,6 +118,49 @@ def test_exact_ledger_event_is_scoped_to_its_account(session):
 
     with pytest.raises(ValueError, match="Event not found"):
         LedgerService(session).get_event_by_id(written.event_id, account_id=outsider.id)
+
+
+def test_exact_event_route_requires_auth_and_preserves_account_scoped_chain_contract(session):
+    owner = _seed_account(session)
+    outsider = _seed_account(session)
+    owner_key, _ = ApiKeyService(session).issue_api_key(
+        account_id=owner.id,
+        payload=ApiKeyCreateRequest(name="cappo-service", role="viewer", scopes=["*"]),
+    )
+    outsider_key, _ = ApiKeyService(session).issue_api_key(
+        account_id=outsider.id,
+        payload=ApiKeyCreateRequest(name="outsider", role="viewer", scopes=["*"]),
+    )
+    created = _seed_agent(session, owner)
+    written = LedgerService(session).log_event(
+        LedgerEventCreate(
+            agent_id=created.agent_id,
+            event_type="custom",
+            actor="cappo-backend",
+            summary="sealed EEE",
+            details={"semantic_event_type": "capi_evidence_sealed", "evidence_seal": {"eee": {}}},
+        )
+    )
+    app = create_app()
+
+    def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    path = f"/api/v1/ledger/events/{written.event_id}"
+
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers={"x-api-key": outsider_key}).status_code == 404
+    response = client.get(path, headers={"x-api-key": owner_key})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["event_id"] == written.event_id
+    assert body["event_hash"] == written.event_hash
+    assert "prev_event_hash" in body
+    assert body["persisted"] is True
+    assert body["details"]["semantic_event_type"] == "capi_evidence_sealed"
 
 
 def test_empty_ledger_is_unmeasured(session):
