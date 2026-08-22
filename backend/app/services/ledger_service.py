@@ -301,6 +301,12 @@ class LedgerService:
         ).scalar_one_or_none()
         if not event:
             raise ValueError("Event not found")
+        chain_head = self.db.execute(
+            select(models.LedgerEvent.event_hash)
+            .where(models.LedgerEvent.agent_id == event.agent_id)
+            .order_by(models.LedgerEvent.created_at.desc(), models.LedgerEvent.id.desc())
+            .limit(1)
+        ).scalar_one()
         return LedgerEventResponse(
             event_id=event.event_id,
             event_type=event.event_type,
@@ -312,5 +318,5 @@ class LedgerService:
             created_at=event.created_at,
             persisted=True,
             idempotent_replay=False,
-            chain_head=event.event_hash,
+            chain_head=chain_head,
         )

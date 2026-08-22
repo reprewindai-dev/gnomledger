@@ -92,12 +92,22 @@ def test_exact_ledger_event_can_be_retrieved_by_id(session):
             details={"semantic_event_type": "capi_evidence_sealed", "evidence_seal": {"eee": {}}},
         )
     )
+    latest = service.log_event(
+        LedgerEventCreate(
+            agent_id=created.agent_id,
+            event_type="custom",
+            actor="cappo-backend",
+            summary="later event",
+            details={"semantic_event_type": "later"},
+        )
+    )
 
     retrieved = service.get_event_by_id(written.event_id, account_id=account.id)
 
     assert retrieved.event_id == written.event_id
     assert retrieved.event_hash == written.event_hash
     assert retrieved.persisted is True
+    assert retrieved.chain_head == latest.event_hash
 
 
 def test_exact_ledger_event_is_scoped_to_its_account(session):
