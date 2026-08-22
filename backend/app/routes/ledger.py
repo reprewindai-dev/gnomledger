@@ -39,6 +39,19 @@ def get_agent_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
+@router.get("/events/{event_id}", response_model=LedgerEventResponse)
+def get_ledger_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+) -> LedgerEventResponse:
+    """Retrieve one exact authenticated ledger event, including its evidence payload."""
+    try:
+        return LedgerService(db).get_event_by_id(event_id, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.get("/agents/{agent_id}/verify", response_model=LedgerChainVerifyRequest)
 def verify_agent_chain(
     agent_id: str,

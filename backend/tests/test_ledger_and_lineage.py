@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from app import models
-from app.schemas import AgentCreateRequest, GenomePayload, LineageForkRequest, LedgerEventCreate
+from app.schemas import AgentCreateRequest, GenomePayload, LedgerEventCreate
 from app.services.certificate_service import CertificateService
-from app.services.genome_service import GenomeService
-from app.services.lineage_service import LineageService
 from app.services.ledger_service import LedgerService
-from app.schemas import GenomeUpdateRequest
+from app.services.lineage_service import LineageService
 from app.utils import short_id
 
 
@@ -55,6 +53,47 @@ def test_ledger_idempotency(session):
     first = svc.log_event(LedgerEventCreate(**event_payload))
     second = svc.log_event(LedgerEventCreate(**event_payload))
     assert first.event_id == second.event_id
+
+
+def test_exact_ledger_event_can_be_retrieved_by_id(session):
+    account = _seed_account(session)
+    created = _seed_agent(session, account)
+    service = LedgerService(session)
+    written = service.log_event(
+        LedgerEventCreate(
+            agent_id=created.agent_id,
+            event_type="custom",
+            actor="cappo-backend",
+            summary="CAPPO evidence seal",
+            details={"semantic_event_type": "capi_evidence_sealed", "evidence_seal": {"eee": {}}},
+        )
+    )
+
+    retrieved = service.get_event_by_id(written.event_id, account_id=account.id)
+
+    assert retrieved.event_id == written.event_id
+    assert retrieved.event_hash == written.event_hash
+    assert retrieved.persisted is True
+
+
+def test_exact_ledger_event_is_scoped_to_its_account(session):
+    owner = _seed_account(session)
+    outsider = _seed_account(session)
+    created = _seed_agent(session, owner)
+    written = LedgerService(session).log_event(
+        LedgerEventCreate(
+            agent_id=created.agent_id,
+            event_type="custom",
+            actor="cappo-backend",
+            summary="private evidence seal",
+            details={"semantic_event_type": "capi_evidence_sealed"},
+        )
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="Event not found"):
+        LedgerService(session).get_event_by_id(written.event_id, account_id=outsider.id)
 
 
 def test_empty_ledger_is_unmeasured(session):

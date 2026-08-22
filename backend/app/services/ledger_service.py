@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from .. import models
 from ..schemas import LedgerEventCreate, LedgerEventResponse
@@ -286,4 +286,29 @@ class LedgerService:
             persisted=True,
             idempotent_replay=False,
             chain_head=event.event_hash
+        )
+
+    def get_event_by_id(self, event_id: str, *, account_id: int) -> LedgerEventResponse:
+        event = self.db.execute(
+            select(models.LedgerEvent)
+            .join(models.Agent, models.LedgerEvent.agent_id == models.Agent.id)
+            .where(
+                models.LedgerEvent.event_id == event_id,
+                models.Agent.account_id == account_id,
+            )
+        ).scalar_one_or_none()
+        if not event:
+            raise ValueError("Event not found")
+        return LedgerEventResponse(
+            event_id=event.event_id,
+            event_type=event.event_type,
+            actor=event.actor,
+            summary=event.summary,
+            details=event.details,
+            prev_event_hash=event.prev_event_hash,
+            event_hash=event.event_hash,
+            created_at=event.created_at,
+            persisted=True,
+            idempotent_replay=False,
+            chain_head=event.event_hash,
         )
