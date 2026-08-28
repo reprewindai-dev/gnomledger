@@ -1,0 +1,11 @@
+{
+  "timestamp": 1787935266.6624494,
+  "listener": "http://localhost:8001",
+  "route": "POST /api/v1/ledger/events",
+  "protocol": "HTTP/1.1",
+  "tls": false,
+  "auth_mode": "x-api-key",
+  "route_verified": true,
+  "wid5_enforcement": true,
+  "note": "WID-5 identity chain enforced via PGLEvidenceValidator on details.provenance"
+}

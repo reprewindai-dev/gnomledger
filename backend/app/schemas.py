@@ -32,6 +32,33 @@ class AgentCreateRequest(BaseModel):
     parent_agent_ids: list[str] = Field(default_factory=list)
 
 
+
+class PGLIdentityChainProvenance(BaseModel):
+    """
+    WID-5 identity chain provenance — required on all governed evidence events.
+
+    These fields are enforced by PGLEvidenceValidator after Pydantic schema
+    validation succeeds. Presence here makes them first-class in the schema
+    so callers cannot skip them without a 422, and the WID-5 validator then
+    enforces format, hashing, and truth-discipline requirements (403 on denial).
+    """
+    trust_domain_id: str | None = None
+    workload_identifier: str | None = None
+    profile_id: str | None = None
+    ephemeral_execution_id: str | None = None
+    authority_hash: str | None = None
+    candidate_act_hash: str | None = None
+    policy_decision_hash: str | None = None
+    p5_operation_id: str | None = None
+    p5_truth_state: str | None = None
+    event_hash: str | None = None
+    previous_event_hash: str | None = None
+    identity_chain_hash: str | None = None
+    signature: str | None = None
+    _actual_state: str | None = None
+    _asserted_as: str | None = None
+
+
 class StandardComplianceResult(BaseModel):
     id: str
     version: str | None = None
@@ -53,7 +80,7 @@ class PreExecutionAuthorizationDetails(BaseModel):
     approved_budget_cents: int
     reserve_cents: int
     actor_id: str | None
-    provenance: dict[str, Any]
+    provenance: PGLIdentityChainProvenance
     standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
 
 
@@ -66,8 +93,9 @@ class PostExecutionAttestationDetails(BaseModel):
     outcome_hash: str
     governance_decision: str
     actor_id: str | None
-    provenance: dict[str, Any]
+    provenance: PGLIdentityChainProvenance
     standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
+
 
 
 class AgentResponse(BaseModel):

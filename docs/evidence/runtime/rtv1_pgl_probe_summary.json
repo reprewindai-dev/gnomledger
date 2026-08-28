@@ -1,0 +1,8 @@
+{
+  "timestamp": 1787935285.159974,
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "verdict": "PASS",
+  "note": "Each negative probe sends a schema-valid LedgerEventCreate with exactly one provenance field corrupted. 403 with PGL_* denial_code proves WID-5 enforcement. P1 proves valid payloads are accepted."
+}
