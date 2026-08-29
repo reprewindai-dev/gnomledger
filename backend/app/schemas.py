@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class PGLRequestContext(BaseModel):
@@ -37,6 +37,7 @@ class StandardComplianceResult(BaseModel):
     version: str | None = None
     result: Literal["PASS", "FAIL", "NOT_EVALUATED", "NOT_FOUND"]
     reason: str | None = None
+
 
 class PreExecutionAuthorizationDetails(BaseModel):
     schema_version: Literal["pgl.pre_execution_authorization.v1"]
@@ -98,9 +99,6 @@ class GenomeUpdateRequest(BaseModel):
     changes: GenomePayload
     note: str = "Genome update"
 
-
-from typing import Annotated
-from pydantic import model_validator
 
 class LedgerEventCreate(BaseModel):
     agent_id: str = Field(min_length=1, max_length=36)
