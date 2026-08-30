@@ -10,7 +10,6 @@ from ..schemas import (
     CertificateDownloadResponse,
     GenomePayload,
     LedgerChainVerifyRequest,
-    LedgerEventResponse,
     VeklmAdapterSnapshot,
 )
 from ..utils import stable_hash, utc_now
@@ -59,7 +58,7 @@ class AdapterService:
         base_score = 50.0
         events = agent.ledger_events
         evidence_head = events[-1].event_hash if events else None
-        
+
         for event in events:
             if event.event_type == "birth_registration":
                 base_score = max(base_score, 50.0)
@@ -69,9 +68,9 @@ class AdapterService:
                 base_score += event.details.get("score", 0) / 10.0
             elif event.event_type == "violation":
                 base_score -= 20.0
-                
+
         base_score = max(0.0, min(100.0, base_score))
-        
+
         if base_score >= 90:
             risk_tier = "production"
         elif base_score >= 70:
