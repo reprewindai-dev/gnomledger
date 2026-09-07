@@ -9,7 +9,7 @@ packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
-fastapi = "^0.110.0"
+fastapi = "^0.141.1"
 uvicorn = { extras = ["standard"], version = "^0.29.0" }
 sqlalchemy = "^2.0.28"
 psycopg = { version = "^3.3.4", extras = ["binary"] }
