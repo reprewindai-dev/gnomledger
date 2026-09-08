@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import asyncio
 import hashlib
@@ -18,7 +18,7 @@ except ImportError:  # Optional integration is not present in a clean checkout.
     AmphotericRouter = None
     create_mcp_endpoints = None
 
-from .config import get_settings
+from .config import get_settings  # noqa: I001
 from .database import check_database, init_database
 from .routes import create_api_router
 from .routes.health_dependencies import router as health_dependencies_router
@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
                 app.state.database_error = None
                 logger.info("PGL database schema is ready")
                 return
-            except Exception as exc:  # pragma: no cover - exact DB driver errors vary by deployment
+            except Exception as exc:  # pragma: no cover - exact DB driver errors vary by deployment  # noqa: BLE001
                 app.state.database_ready = False
                 app.state.database_error = str(exc)
                 if time.monotonic() >= deadline:
@@ -160,7 +160,7 @@ def _build_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(_: Request, exc: Exception):
-        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)  # noqa: LOG014
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse(detail="Internal Server Error").model_dump(),

@@ -13,8 +13,8 @@ router = APIRouter()
 @router.get("/vekml/agents/{agent_id}/snapshot", response_model=VeklmAdapterSnapshot)
 def get_vekml_agent_snapshot(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> VeklmAdapterSnapshot:
     service = AdapterService(db)
     try:

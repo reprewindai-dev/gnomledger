@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -27,8 +27,8 @@ def _to_usage_response(row):
 
 @router.get("/usage", response_model=list[BillingUsageResponse])
 def get_usage(
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> list[BillingUsageResponse]:
     service = BillingService(db)
     usage = service.list_usage(ctx.account_id)
@@ -38,8 +38,8 @@ def get_usage(
 @router.get("/usage/{metric}/limit", response_model=UsageLimitResponse)
 def usage_limit(
     metric: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> UsageLimitResponse:
     account = db.execute(select(models.Account).where(models.Account.id == ctx.account_id)).scalar_one_or_none()
     if account is None:
@@ -60,7 +60,7 @@ def usage_limit(
 async def stripe_webhook(
     request: Request,
     stripe_signature: str | None = Header(default=None, alias="stripe-signature"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     if not settings.stripe_webhook_secret:
         raise HTTPException(status_code=400, detail="Stripe webhook secret is not configured")

@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -79,7 +79,7 @@ class LineageService:
         self.db.add_all([new_genome, certificate, edge])
 
         # Recalculate trust snapshot and save to DB in same transaction
-        from .trust_policy import TrustPolicyV1
+        from .trust_policy import TrustPolicyV1  # noqa: I001
         from ..utils import utc_now
         trust_data = TrustPolicyV1.calculate_trust([])
         

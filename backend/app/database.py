@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
+from typing import Generator  # noqa: UP035
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine

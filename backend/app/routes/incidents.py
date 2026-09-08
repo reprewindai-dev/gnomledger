@@ -58,8 +58,8 @@ class IncidentOut(BaseModel):
 def create_incident(
     agent_id: str,
     body: IncidentCreate,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     record = incident_service.create_incident(
         db,
@@ -83,8 +83,8 @@ def list_incidents(
     severity: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     records = incident_service.list_incidents(
         db, agent_id, status=status_filter, severity=severity, limit=limit, offset=offset
@@ -100,8 +100,8 @@ def list_incidents(
 def get_incident(
     agent_id: str,
     incident_id: str,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     record = incident_service.get_incident(db, agent_id, incident_id)
     return _serialize(record, agent_id)
@@ -116,8 +116,8 @@ def update_incident(
     agent_id: str,
     incident_id: str,
     body: IncidentUpdate,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     record = incident_service.update_incident(
         db,
@@ -137,8 +137,8 @@ def update_incident(
 def delete_incident(
     agent_id: str,
     incident_id: str,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     incident_service.delete_incident(db, agent_id, incident_id)
 

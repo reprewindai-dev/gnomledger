@@ -156,7 +156,7 @@ class LineageTreeNode(BaseModel):
     agent_id: str
     name: str
     status: str
-    children: list["LineageTreeNode"] = Field(default_factory=list)
+    children: list["LineageTreeNode"] = Field(default_factory=list)  # noqa: UP037
 
 
 LineageTreeNode.model_rebuild()

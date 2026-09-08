@@ -17,7 +17,7 @@ def test_public_ledger_proof_excludes_tenant_payload() -> None:
         },
         prev_event_hash="prev-hash",
         event_hash="event-hash",
-        created_at=datetime(2026, 8, 7, tzinfo=timezone.utc),
+        created_at=datetime(2026, 8, 7, tzinfo=timezone.utc),  # noqa: UP017
         persisted=True,
         chain_head="event-hash",
     )

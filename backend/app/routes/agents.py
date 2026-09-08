@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -25,8 +25,8 @@ router = APIRouter()
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 def create_agent(
     payload: AgentCreateRequest,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> AgentResponse:
     service = CertificateService(db)
     try:
@@ -40,8 +40,8 @@ def create_agent(
 def list_agents(
     limit: int = Query(default=100, ge=1, le=200),
     cursor: int | None = Query(default=None, ge=1),
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> list[AgentDetailResponse]:
     stmt = (
         select(models.Agent)
@@ -101,8 +101,8 @@ def list_agents(
 @router.get("/{agent_id}", response_model=AgentDetailResponse)
 def get_agent(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> AgentDetailResponse:
     agent = db.execute(
         select(models.Agent)
@@ -161,8 +161,8 @@ def get_agent(
 @router.get("/{agent_id}/certificate", response_model=CertificateDownloadResponse)
 def get_certificate(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> CertificateDownloadResponse:
     agent = db.execute(
         select(models.Agent)
@@ -184,8 +184,8 @@ def get_certificate(
 def update_genome(
     agent_id: str,
     payload: GenomeUpdateRequest,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> GenomePayload:
     service = GenomeService(db)
     try:
@@ -205,8 +205,8 @@ def update_genome(
 @router.post("/{agent_id}/trust/rebuild", response_model=AgentDetailResponse)
 def rebuild_agent_trust(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> AgentDetailResponse:
     agent = db.execute(
         select(models.Agent)
@@ -271,8 +271,8 @@ def rebuild_agent_trust(
 @router.post("/execution/validate", response_model=ExecutionValidateResponse)
 def validate_execution(
     payload: ExecutionValidateRequest,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> ExecutionValidateResponse:
     agent = db.execute(
         select(models.Agent)

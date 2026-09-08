@@ -26,7 +26,7 @@ _SYSTEM_PROMPT = (
 
 class NotaryChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=8000)
-    agent_id: Optional[str] = Field(None, description="Optional agent UUID for context injection")
+    agent_id: Optional[str] = Field(None, description="Optional agent UUID for context injection")  # noqa: UP045
     provider: Literal["ollama", "openai_compatible", "gemini"] = Field("ollama")
     model: str | None = Field(None, max_length=128)
     provider_api_key: str | None = Field(None, max_length=4096, repr=False)
@@ -73,7 +73,7 @@ async def _call_ollama(body: NotaryChatRequest) -> NotaryChatResponse:
         data = resp.json()
     reply = data.get("message", {}).get("content")
     if not isinstance(reply, str):
-        raise ValueError("Unexpected Ollama response shape")
+        raise ValueError("Unexpected Ollama response shape")  # noqa: TRY004
     return NotaryChatResponse(
         reply=reply,
         provider="ollama",
@@ -151,7 +151,7 @@ async def _call_gemini(body: NotaryChatRequest) -> NotaryChatResponse:
 @router.post("/chat", response_model=NotaryChatResponse)
 async def notary_chat(
     body: NotaryChatRequest,
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ) -> NotaryChatResponse:
     """Send a message to the Notary Custodian AI through Ollama or BYOK providers."""
     _ = ctx

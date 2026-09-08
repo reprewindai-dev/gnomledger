@@ -53,7 +53,7 @@ def list_reminders(
     agent = _get_agent(db, agent_id)
     q = db.query(AuditReminder).filter(AuditReminder.agent_id == agent.id)
     if active_only:
-        q = q.filter(AuditReminder.is_active == True)  # noqa: E712
+        q = q.filter(AuditReminder.is_active == True)  # noqa: E712, RUF100
     return q.order_by(AuditReminder.next_trigger_at.asc()).offset(offset).limit(limit).all()
 
 

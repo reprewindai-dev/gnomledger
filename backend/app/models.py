@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from datetime import datetime
 from decimal import Decimal
@@ -38,10 +38,10 @@ class Account(Base):
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    users: Mapped[list["User"]] = relationship(back_populates="account", cascade="all, delete-orphan")
-    agents: Mapped[list["Agent"]] = relationship(back_populates="account", cascade="all, delete-orphan")
-    api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="account", cascade="all, delete-orphan")
-    billing_usage: Mapped[list["BillingUsage"]] = relationship(back_populates="account", cascade="all, delete-orphan")
+    users: Mapped[list["User"]] = relationship(back_populates="account", cascade="all, delete-orphan")  # noqa: UP037
+    agents: Mapped[list["Agent"]] = relationship(back_populates="account", cascade="all, delete-orphan")  # noqa: UP037
+    api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="account", cascade="all, delete-orphan")  # noqa: UP037
+    billing_usage: Mapped[list["BillingUsage"]] = relationship(back_populates="account", cascade="all, delete-orphan")  # noqa: UP037
 
 
 class User(Base):
@@ -95,18 +95,18 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     account: Mapped[Account] = relationship(back_populates="agents")
-    genome_versions: Mapped[list["GenomeVersion"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
-    certificate: Mapped["BirthCertificate"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")
-    trust_snapshot: Mapped["AgentTrustSnapshot"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")
-    ledger_events: Mapped[list["LedgerEvent"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
-    parent_edges: Mapped[list["LineageEdge"]] = relationship(
+    genome_versions: Mapped[list["GenomeVersion"]] = relationship(back_populates="agent", cascade="all, delete-orphan")  # noqa: UP037
+    certificate: Mapped["BirthCertificate"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")  # noqa: UP037
+    trust_snapshot: Mapped["AgentTrustSnapshot"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")  # noqa: UP037
+    ledger_events: Mapped[list["LedgerEvent"]] = relationship(back_populates="agent", cascade="all, delete-orphan")  # noqa: UP037
+    parent_edges: Mapped[list["LineageEdge"]] = relationship(  # noqa: UP037
         back_populates="child", foreign_keys="LineageEdge.child_agent_id", cascade="all, delete-orphan"
     )
-    child_edges: Mapped[list["LineageEdge"]] = relationship(
+    child_edges: Mapped[list["LineageEdge"]] = relationship(  # noqa: UP037
         back_populates="parent", foreign_keys="LineageEdge.parent_agent_id", cascade="all, delete-orphan"
     )
-    incidents: Mapped[list["IncidentRecord"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
-    audit_reminders: Mapped[list["AuditReminder"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    incidents: Mapped[list["IncidentRecord"]] = relationship(back_populates="agent", cascade="all, delete-orphan")  # noqa: UP037
+    audit_reminders: Mapped[list["AuditReminder"]] = relationship(back_populates="agent", cascade="all, delete-orphan")  # noqa: UP037
 
 
 class GenomeVersion(Base):

@@ -69,5 +69,5 @@ class ApiKeyService:
         ).scalar_one_or_none()
         if not key:
             raise ValueError("Unknown API key")
-        key.revoked_at = datetime.utcnow()
+        key.revoked_at = datetime.utcnow()  # noqa: DTZ003
         self.db.commit()

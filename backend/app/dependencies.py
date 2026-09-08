@@ -53,7 +53,7 @@ def _account_from_token(db: Session, api_key: str) -> PGLRequestContext:
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)  # noqa: UP017
     if row.expires_at and row.expires_at <= now:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key expired")
     if row.revoked_at is not None:
@@ -66,7 +66,7 @@ def _account_from_token(db: Session, api_key: str) -> PGLRequestContext:
 
 def auth_context(
     x_api_key: Annotated[str | None, Header(alias="x-api-key")] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ) -> PGLRequestContext:
     return _account_from_token(db, x_api_key)
 

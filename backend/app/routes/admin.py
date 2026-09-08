@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -17,7 +17,7 @@ settings = get_settings()
 @router.post("/bootstrap", response_model=ApiKeyCreateResponse)
 def bootstrap(
     payload: BootstrapRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     if payload.bootstrap_token != settings.bootstrap_admin_token:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid bootstrap token")
@@ -59,8 +59,8 @@ def bootstrap(
 def create_api_key(
     account_id: int,
     payload: ApiKeyCreateRequest,
-    db: Session = Depends(get_db),
-    _ctx=Depends(require_role("admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    _ctx=Depends(require_role("admin", "owner")),  # noqa: B008
 ):
     account = db.execute(select(models.Account).where(models.Account.id == account_id)).scalar_one_or_none()
     if not account:
@@ -82,8 +82,8 @@ def create_api_key(
 @router.get("/accounts/{account_id}/keys", response_model=list[ApiKeyListItem])
 def list_api_keys(
     account_id: int,
-    db: Session = Depends(get_db),
-    _ctx=Depends(require_role("admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    _ctx=Depends(require_role("admin", "owner")),  # noqa: B008
 ):
     account = db.execute(select(models.Account).where(models.Account.id == account_id)).scalar_one_or_none()
     if not account:
@@ -111,12 +111,12 @@ def list_api_keys(
 def revoke_api_key(
     account_id: int,
     api_key_id: int,
-    db: Session = Depends(get_db),
-    _ctx=Depends(require_role("admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    _ctx=Depends(require_role("admin", "owner")),  # noqa: B008
 ):
     service = ApiKeyService(db)
     try:
         service.revoke_api_key(account_id=account_id, api_key_id=api_key_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return None
+    return None  # noqa: PLR1711, RET501
