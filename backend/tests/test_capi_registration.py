@@ -21,6 +21,16 @@ class RecordingTransport(httpx.AsyncBaseTransport):
             await asyncio.wait_for(self._calls.wait(), timeout=1)
 
 
+def test_registration_payload_matches_observed_gnomledger_responsibilities() -> None:
+    from backend.app.services.capi_registration import _registration_payload
+
+    payload = _registration_payload()
+
+    assert payload["service_name"] == "gnomledger"
+    assert payload["capabilities"] == ["pgl_ledger", "verification"]
+    assert "x402_settlement" not in payload["capabilities"]
+
+
 def test_heartbeat_refreshes_an_existing_registration() -> None:
     from backend.app.services.capi_registration import maintain_capi_registration
 
