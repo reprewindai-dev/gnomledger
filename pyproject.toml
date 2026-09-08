@@ -3,8 +3,8 @@ name = "project-genome-ledger"
 version = "0.1.0"
 requires-python = "~=3.12.0"
 dependencies = [
-  "fastapi==0.110.0",
-  "uvicorn[standard]==0.29.0",
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.29.0",
   "sqlalchemy==2.0.28",
   "psycopg[binary]==3.3.4",
   "pydantic==2.13.4",
@@ -16,3 +16,7 @@ dependencies = [
   "redis==5.0.3",
   "stripe==7.10.0",
 ]
+
+[tool.ruff.lint]
+ignore = ["B008", "BLE001", "E722", "DTZ003", "PLW1510", "RUF013", "F841", "E501"]
+
