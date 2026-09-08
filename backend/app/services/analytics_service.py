@@ -9,7 +9,9 @@ class AnalyticsService:
     def __init__(self, db: Session):
         self.db = db
 
-    def track(self, event_type: str, payload: dict, account_id: int | None = None) -> models.AnalyticsEvent:
+    def track(
+        self, event_type: str, payload: dict, account_id: int | None = None
+    ) -> models.AnalyticsEvent:
         event = models.AnalyticsEvent(
             event_type=event_type,
             payload=payload,

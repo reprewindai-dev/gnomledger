@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class PGLRequestContext(BaseModel):
@@ -32,7 +32,6 @@ class AgentCreateRequest(BaseModel):
     parent_agent_ids: list[str] = Field(default_factory=list)
 
 
-
 class PGLIdentityChainProvenance(BaseModel):
     """
     WID-5 identity chain provenance — required on all governed evidence events.
@@ -42,6 +41,7 @@ class PGLIdentityChainProvenance(BaseModel):
     so callers cannot skip them without a 422, and the WID-5 validator then
     enforces format, hashing, and truth-discipline requirements (403 on denial).
     """
+
     trust_domain_id: str | None = None
     workload_identifier: str | None = None
     profile_id: str | None = None
@@ -55,6 +55,7 @@ class PGLIdentityChainProvenance(BaseModel):
     previous_event_hash: str | None = None
     identity_chain_hash: str | None = None
     signature: str | None = None
+    public_key: str | None = None
     _actual_state: str | None = None
     _asserted_as: str | None = None
 
@@ -64,6 +65,7 @@ class StandardComplianceResult(BaseModel):
     version: str | None = None
     result: Literal["PASS", "FAIL", "NOT_EVALUATED", "NOT_FOUND"]
     reason: str | None = None
+
 
 class PreExecutionAuthorizationDetails(BaseModel):
     schema_version: Literal["pgl.pre_execution_authorization.v1"]
@@ -97,7 +99,6 @@ class PostExecutionAttestationDetails(BaseModel):
     standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
 
 
-
 class AgentResponse(BaseModel):
     agent_id: str
     certificate_id: str
@@ -127,8 +128,8 @@ class GenomeUpdateRequest(BaseModel):
     note: str = "Genome update"
 
 
-from typing import Annotated
 from pydantic import model_validator
+
 
 class LedgerEventCreate(BaseModel):
     agent_id: str = Field(min_length=1, max_length=36)
@@ -186,7 +187,7 @@ class LineageTreeNode(BaseModel):
     agent_id: str
     name: str
     status: str
-    children: list["LineageTreeNode"] = Field(default_factory=list)
+    children: list[LineageTreeNode] = Field(default_factory=list)
 
 
 LineageTreeNode.model_rebuild()

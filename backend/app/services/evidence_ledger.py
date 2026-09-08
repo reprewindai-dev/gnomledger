@@ -13,14 +13,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import structlog
-
 from consequence_types import (
-    ExecutionReceipt,
     RecordEvidenceRequest,
     RecordEvidenceResponse,
 )
@@ -46,9 +43,11 @@ class GnomLedger:
     Stub storage: JSON lines file at LEDGER_PATH.
     """
 
-    def __init__(self, ledger_path: Optional[str] = None, signing_key: bytes = None):
+    def __init__(self, ledger_path: str | None = None, signing_key: bytes | None = None):
         self._ledger_path = Path(ledger_path or os.getenv("LEDGER_PATH", "./ledger.jsonl"))
-        self._signing_key = signing_key or os.getenv("LEDGER_SIGNING_KEY", "dev-ledger-key").encode()
+        self._signing_key = (
+            signing_key or os.getenv("LEDGER_SIGNING_KEY", "dev-ledger-key").encode()
+        )
         self._sequence: int = self._load_sequence()
         self._previous_hash: str = self._load_last_hash()
 
@@ -66,11 +65,11 @@ class GnomLedger:
             "sequence": self._sequence + 1,
             "receipt": receipt.model_dump(mode="json"),
             "previous_hash": self._previous_hash,
-            "recorded_at": datetime.now(tz=timezone.utc).isoformat(),
+            "recorded_at": datetime.now(tz=UTC).isoformat(),
         }
-        entry_bytes   = json.dumps(entry, sort_keys=True, default=str).encode()
-        entry_hash    = sha256_hex(entry_bytes)
-        merkle_proof  = sha256_hex((entry_hash + self._previous_hash).encode())
+        entry_bytes = json.dumps(entry, sort_keys=True, default=str).encode()
+        entry_hash = sha256_hex(entry_bytes)
+        merkle_proof = sha256_hex((entry_hash + self._previous_hash).encode())
 
         self._append_entry(entry, entry_hash)
         self._sequence += 1
@@ -108,7 +107,7 @@ class GnomLedger:
             prev_hash = data["hash"]
         return True
 
-    def get_receipt(self, receipt_id: str) -> Optional[dict]:
+    def get_receipt(self, receipt_id: str) -> dict | None:
         """Look up a receipt by ID — used by the x402 engine to verify evidence before payment."""
         if not self._ledger_path.exists():
             return None

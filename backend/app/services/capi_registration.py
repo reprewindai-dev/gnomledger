@@ -18,7 +18,9 @@ DEFAULT_REGISTRY_TTL_MS = 300_000
 
 
 def _heartbeat_interval_seconds(settings: Settings) -> float:
-    raw_ttl = getattr(settings, "CAPI_REGISTRY_TTL_MS", os.getenv("CAPI_REGISTRY_TTL_MS", DEFAULT_REGISTRY_TTL_MS))
+    raw_ttl = getattr(
+        settings, "CAPI_REGISTRY_TTL_MS", os.getenv("CAPI_REGISTRY_TTL_MS", DEFAULT_REGISTRY_TTL_MS)
+    )
     try:
         ttl_ms = int(raw_ttl)
     except (TypeError, ValueError):
@@ -65,8 +67,12 @@ async def register_with_capi(
         return False
 
     try:
-        async with httpx.AsyncClient(timeout=REGISTRATION_TIMEOUT_SECONDS, transport=transport) as client:
-            response = await client.post(url, json=_registration_payload(), headers=_headers(settings))
+        async with httpx.AsyncClient(
+            timeout=REGISTRATION_TIMEOUT_SECONDS, transport=transport
+        ) as client:
+            response = await client.post(
+                url, json=_registration_payload(), headers=_headers(settings)
+            )
     except httpx.HTTPError as exc:
         logger.warning("cAPI registration failed (%s)", type(exc).__name__)
         return False
@@ -91,8 +97,12 @@ async def heartbeat_until_missing(
         if stop.is_set():
             return False
         try:
-            async with httpx.AsyncClient(timeout=REGISTRATION_TIMEOUT_SECONDS, transport=transport) as client:
-                response = await client.post(url, json={"service_name": "gnomledger"}, headers=_headers(settings))
+            async with httpx.AsyncClient(
+                timeout=REGISTRATION_TIMEOUT_SECONDS, transport=transport
+            ) as client:
+                response = await client.post(
+                    url, json={"service_name": "gnomledger"}, headers=_headers(settings)
+                )
         except httpx.HTTPError as exc:
             logger.warning("cAPI heartbeat failed (%s)", type(exc).__name__)
             continue

@@ -6,19 +6,20 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # I — Identity
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class WorkloadIdentity(BaseModel):
     """Cryptographically verified workload identity (SPIFFE SVID or OIDC)."""
+
     principal: str = Field(..., description="SPIFFE URI or OIDC subject claim")
     workspace_id: uuid.UUID
     verified_at: datetime
@@ -30,14 +31,15 @@ class WorkloadIdentity(BaseModel):
 # P — ActionIntent (input to policy evaluation)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ActionIntent(BaseModel):
     """A structured, well-typed request for a consequential action."""
+
     intent_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     capability_type: str = Field(..., min_length=1, description="e.g. 'github.patch'")
     target_resource: str = Field(..., min_length=1, description="e.g. 'github.com/org/repo@main'")
     target_expected_version: str = Field(
-        ..., min_length=1,
-        description="Expected current version for TOCTOU protection"
+        ..., min_length=1, description="Expected current version for TOCTOU protection"
     )
     max_cost_usd: float = Field(..., gt=0)
     parameters: dict[str, Any] = Field(default_factory=dict)
@@ -55,8 +57,10 @@ class ActionIntent(BaseModel):
 # A — CapabilityLease (CAPPO output / Lockerphycer input)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class CapabilityLease(BaseModel):
     """Cryptographically signed, short-lived lease granting exact authority."""
+
     lease_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     workspace_id: uuid.UUID
     principal: str
@@ -73,13 +77,13 @@ class CapabilityLease(BaseModel):
     receipt_required: bool = True
 
     def is_expired(self) -> bool:
-        from datetime import timezone
-        return datetime.now(tz=timezone.utc) >= self.expires_at
+        return datetime.now(tz=UTC) >= self.expires_at
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # S — Target-State precondition
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TargetStateCheck(BaseModel):
     resource: str
@@ -91,6 +95,7 @@ class TargetStateCheck(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # X — ExecutionCellReceipt (Lockerphycer output)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class EgressAttempt(BaseModel):
     destination: str
@@ -116,12 +121,13 @@ class ExecutionCellReceipt(BaseModel):
 # E — ExecutionReceipt (GnomLedger anchor — the final proof)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ExecutionOutcome(str, Enum):
-    SUCCESS              = "SUCCESS"
-    FAILED_PRECONDITION  = "FAILED_PRECONDITION"
-    FAILED_POLICY        = "FAILED_POLICY"
-    FAILED_EXECUTION     = "FAILED_EXECUTION"
-    FAILED_EVIDENCE      = "FAILED_EVIDENCE"
+    SUCCESS = "SUCCESS"
+    FAILED_PRECONDITION = "FAILED_PRECONDITION"
+    FAILED_POLICY = "FAILED_POLICY"
+    FAILED_EXECUTION = "FAILED_EXECUTION"
+    FAILED_EVIDENCE = "FAILED_EVIDENCE"
 
 
 class ExecutionReceipt(BaseModel):
@@ -130,6 +136,7 @@ class ExecutionReceipt(BaseModel):
     WHO + WHAT + WHY + WHERE + WHEN + STATE_BEFORE + STATE_AFTER +
     HOW_MUCH + OUTCOME + PROOF
     """
+
     receipt_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     # WHO
     principal: str
@@ -150,10 +157,10 @@ class ExecutionReceipt(BaseModel):
     state_after_version: str
     # HOW MUCH
     cost_usd: float
-    x402_settlement_id: Optional[str] = None
+    x402_settlement_id: str | None = None
     # OUTCOME
     outcome: ExecutionOutcome
-    error_message: Optional[str] = None
+    error_message: str | None = None
     # PROOF
     cell_receipt_hash: str
     signature: str
@@ -164,9 +171,10 @@ class ExecutionReceipt(BaseModel):
 # Policy
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class PolicyDecision(str, Enum):
     ALLOW = "ALLOW"
-    DENY  = "DENY"
+    DENY = "DENY"
 
 
 class PolicyEvaluationResult(BaseModel):
@@ -180,46 +188,58 @@ class PolicyEvaluationResult(BaseModel):
 # API envelopes
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class VerifyIdentityRequest(BaseModel):
     credential: str = Field(..., description="Raw SPIFFE SVID or OIDC JWT")
     manifest_pin_hash: str
 
+
 class VerifyIdentityResponse(BaseModel):
     identity: WorkloadIdentity
+
 
 class CompileContextRequest(BaseModel):
     identity: WorkloadIdentity
     action_intent: ActionIntent
 
+
 class CompileContextResponse(BaseModel):
     validated_intent: ActionIntent
     context_hash: str
+
 
 class EvaluatePolicyRequest(BaseModel):
     identity: WorkloadIdentity
     intent: ActionIntent
 
+
 class EvaluatePolicyResponse(BaseModel):
     result: PolicyEvaluationResult
+
 
 class IssueLeaseRequest(BaseModel):
     identity: WorkloadIdentity
     intent: ActionIntent
     policy_result: PolicyEvaluationResult
 
+
 class IssueLeaseResponse(BaseModel):
     lease: CapabilityLease
+
 
 class SpawnCellRequest(BaseModel):
     lease: CapabilityLease
     workload_image_hash: str
 
+
 class SpawnCellResponse(BaseModel):
     cell_id: uuid.UUID
     cell_receipt: ExecutionCellReceipt
 
+
 class RecordEvidenceRequest(BaseModel):
     receipt: ExecutionReceipt
+
 
 class RecordEvidenceResponse(BaseModel):
     merkle_proof: str

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from .. import models
 from ..utils import utc_now
-
 
 PLAN_QUOTAS = {
     "launch": {"certificate_issuance": 25, "lineage_render": 3},
@@ -52,14 +52,17 @@ class BillingService:
 
     def ensure_quota(self, account_id: int, metric: str, limit: float) -> bool:
         period_start, period_end = _month_bucket(utc_now())
-        total = self.db.execute(
-            select(func.coalesce(func.sum(models.BillingUsage.amount), 0)).where(
-                models.BillingUsage.account_id == account_id,
-                models.BillingUsage.metric == metric,
-                models.BillingUsage.period_start >= period_start,
-                models.BillingUsage.period_end <= period_end,
-            )
-        ).scalar_one_or_none() or 0
+        total = (
+            self.db.execute(
+                select(func.coalesce(func.sum(models.BillingUsage.amount), 0)).where(
+                    models.BillingUsage.account_id == account_id,
+                    models.BillingUsage.metric == metric,
+                    models.BillingUsage.period_start >= period_start,
+                    models.BillingUsage.period_end <= period_end,
+                )
+            ).scalar_one_or_none()
+            or 0
+        )
         total = float(total)
         return total < limit
 
@@ -81,17 +84,22 @@ class BillingService:
 
     def get_current_metric(self, account_id: int, metric: str) -> float:
         period_start, period_end = _month_bucket(utc_now())
-        total = self.db.execute(
-            select(func.coalesce(func.sum(models.BillingUsage.amount), 0)).where(
-                models.BillingUsage.account_id == account_id,
-                models.BillingUsage.metric == metric,
-                models.BillingUsage.period_start >= period_start,
-                models.BillingUsage.period_end <= period_end,
-            )
-        ).scalar_one_or_none() or 0
+        total = (
+            self.db.execute(
+                select(func.coalesce(func.sum(models.BillingUsage.amount), 0)).where(
+                    models.BillingUsage.account_id == account_id,
+                    models.BillingUsage.metric == metric,
+                    models.BillingUsage.period_start >= period_start,
+                    models.BillingUsage.period_end <= period_end,
+                )
+            ).scalar_one_or_none()
+            or 0
+        )
         return float(total)
 
-    def record_stripe_event(self, event_id: str, event_type: str, payload: dict) -> models.BillingEvent:
+    def record_stripe_event(
+        self, event_id: str, event_type: str, payload: dict
+    ) -> models.BillingEvent:
         # Best effort dedupe protection for webhook retries
         existing = self.db.execute(
             select(models.BillingEvent).where(models.BillingEvent.stripe_event_id == event_id)

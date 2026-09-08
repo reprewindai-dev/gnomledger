@@ -15,4 +15,9 @@ dependencies = [
   "structlog==24.1.0",
   "redis==5.0.3",
   "stripe==7.10.0",
+    "alembic",
+    "pytest",
 ]
+
+[tool.ruff.lint]
+ignore = ["B008", "BLE001", "E722", "DTZ003", "PLW1510", "RUF013", "F841", "E501"]

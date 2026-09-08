@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from fastapi import HTTPException
 import pytest
+from fastapi import HTTPException
 
 from app import models
 from app.dependencies import require_role
 from app.schemas import AgentCreateRequest, ApiKeyCreateRequest, GenomePayload, PGLRequestContext
+from app.services.billing_service import PLAN_QUOTAS
 from app.services.certificate_service import CertificateService
 from app.services.key_service import ApiKeyService
-from app.services.billing_service import PLAN_QUOTAS
 from app.utils import hash_api_key
 
 
@@ -23,7 +23,9 @@ def test_api_key_hash_verification_and_lookup(session):
     account = _bootstrap_account(session)
     raw, key = ApiKeyService(session).issue_api_key(
         account_id=account.id,
-        payload=ApiKeyCreateRequest(name="owner", role="owner", scopes=["*"], account_id=account.id),
+        payload=ApiKeyCreateRequest(
+            name="owner", role="owner", scopes=["*"], account_id=account.id
+        ),
     )
     assert raw.startswith("pgl_")
     assert hash_api_key(raw) == key.key_hash
@@ -96,6 +98,11 @@ def test_api_key_rejects_invalid_role(session):
 def test_api_key_name_must_be_unique_within_account(session):
     account = _bootstrap_account(session)
     service = ApiKeyService(session)
-    service.issue_api_key(account_id=account.id, payload=ApiKeyCreateRequest(name="dup", role="owner", scopes=["*"]))
+    service.issue_api_key(
+        account_id=account.id, payload=ApiKeyCreateRequest(name="dup", role="owner", scopes=["*"])
+    )
     with pytest.raises(ValueError):
-        service.issue_api_key(account_id=account.id, payload=ApiKeyCreateRequest(name="dup", role="admin", scopes=["*"]))
+        service.issue_api_key(
+            account_id=account.id,
+            payload=ApiKeyCreateRequest(name="dup", role="admin", scopes=["*"]),
+        )

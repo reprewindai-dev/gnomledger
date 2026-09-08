@@ -1,8 +1,9 @@
 """Notary Custodian AI route with Ollama-first BYOK provider support."""
+
 from __future__ import annotations
 
 import os
-from typing import Literal, Optional
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,7 +27,7 @@ _SYSTEM_PROMPT = (
 
 class NotaryChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=8000)
-    agent_id: Optional[str] = Field(None, description="Optional agent UUID for context injection")
+    agent_id: str | None = Field(None, description="Optional agent UUID for context injection")
     provider: Literal["ollama", "openai_compatible", "gemini"] = Field("ollama")
     model: str | None = Field(None, max_length=128)
     provider_api_key: str | None = Field(None, max_length=4096, repr=False)
@@ -53,9 +54,7 @@ def _clean_base_url(value: str) -> str:
 
 async def _call_ollama(body: NotaryChatRequest) -> NotaryChatResponse:
     base_url = _clean_base_url(
-        body.provider_base_url
-        or os.environ.get("OLLAMA_BASE_URL")
-        or "http://ollama:11434"
+        body.provider_base_url or os.environ.get("OLLAMA_BASE_URL") or "http://ollama:11434"
     )
     model = body.model or os.environ.get("OLLAMA_MODEL") or "llama3.1"
     payload = {
@@ -73,7 +72,7 @@ async def _call_ollama(body: NotaryChatRequest) -> NotaryChatResponse:
         data = resp.json()
     reply = data.get("message", {}).get("content")
     if not isinstance(reply, str):
-        raise ValueError("Unexpected Ollama response shape")
+        raise ValueError("Unexpected Ollama response shape")  # noqa: TRY004
     return NotaryChatResponse(
         reply=reply,
         provider="ollama",
@@ -134,7 +133,9 @@ async def _call_gemini(body: NotaryChatRequest) -> NotaryChatResponse:
         "generationConfig": {"temperature": 0.4, "maxOutputTokens": 2048},
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(f"{_GEMINI_BASE}/models/{model}:generateContent?key={api_key}", json=payload)
+        resp = await client.post(
+            f"{_GEMINI_BASE}/models/{model}:generateContent?key={api_key}", json=payload
+        )
         resp.raise_for_status()
         data = resp.json()
     reply = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -151,7 +152,7 @@ async def _call_gemini(body: NotaryChatRequest) -> NotaryChatResponse:
 @router.post("/chat", response_model=NotaryChatResponse)
 async def notary_chat(
     body: NotaryChatRequest,
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ) -> NotaryChatResponse:
     """Send a message to the Notary Custodian AI through Ollama or BYOK providers."""
     _ = ctx
@@ -178,4 +179,6 @@ async def notary_chat(
             detail=f"Unexpected {body.provider} response shape: {exc}",
         ) from exc
 
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported notary provider")
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported notary provider"
+    )

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from .. import models
 from ..schemas import LedgerEventCreate, LedgerEventResponse
@@ -86,18 +86,19 @@ class LedgerService:
 
         # Recalculate trust snapshot and save to DB in same transaction
         from .trust_policy import TrustPolicyV1
+
         all_events = list(agent.ledger_events)
         if event not in all_events:
             all_events.append(event)
 
         trust_data = TrustPolicyV1.calculate_trust(all_events)
-        
+
         snapshot = agent.trust_snapshot
         if not snapshot:
             snapshot = models.AgentTrustSnapshot(agent_id=agent.id)
             self.db.add(snapshot)
             agent.trust_snapshot = snapshot
-        
+
         snapshot.trust_score = trust_data["trust_score"]
         snapshot.risk_tier = trust_data["risk_tier"]
         snapshot.trust_policy_version = trust_data["trust_policy_version"]
@@ -262,7 +263,9 @@ class LedgerService:
                 "last_event_at": last_event_at,
                 "latest_event_hash": latest_hash,
                 "errors": errors,
-                "reason": "Ledger chain verified." if not errors else "Ledger chain verification failed.",
+                "reason": "Ledger chain verified."
+                if not errors
+                else "Ledger chain verification failed.",
             },
         )
 
@@ -270,10 +273,10 @@ class LedgerService:
         event = self.db.execute(
             select(models.LedgerEvent).where(models.LedgerEvent.event_hash == event_hash)
         ).scalar_one_or_none()
-        
+
         if not event:
             raise ValueError("Event not found")
-            
+
         return LedgerEventResponse(
             event_id=event.event_id,
             event_type=event.event_type,
@@ -285,5 +288,5 @@ class LedgerService:
             created_at=event.created_at,
             persisted=True,
             idempotent_replay=False,
-            chain_head=event.event_hash
+            chain_head=event.event_hash,
         )

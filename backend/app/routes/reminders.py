@@ -18,6 +18,7 @@ router = APIRouter(prefix="/agents/{agent_id}/reminders", tags=["reminders"])
 # Schemas
 # ---------------------------------------------------------------------------
 
+
 class ReminderCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     message: str = Field(..., min_length=1)
@@ -51,6 +52,7 @@ class ReminderOut(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "",
     response_model=ReminderOut,
@@ -60,8 +62,8 @@ class ReminderOut(BaseModel):
 def create_reminder(
     agent_id: str,
     body: ReminderCreate,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     reminder = reminder_service.create_reminder(
         db,
@@ -84,8 +86,8 @@ def list_reminders(
     active_only: bool = Query(False),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     reminders = reminder_service.list_reminders(
         db, agent_id, active_only=active_only, limit=limit, offset=offset
@@ -101,8 +103,8 @@ def list_reminders(
 def get_reminder(
     agent_id: str,
     reminder_id: str,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     reminder = reminder_service.get_reminder(db, agent_id, reminder_id)
     return _serialize(reminder, agent_id)
@@ -117,8 +119,8 @@ def update_reminder(
     agent_id: str,
     reminder_id: str,
     body: ReminderUpdate,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     reminder = reminder_service.update_reminder(
         db,
@@ -141,8 +143,8 @@ def update_reminder(
 def trigger_reminder(
     agent_id: str,
     reminder_id: str,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     reminder = reminder_service.trigger_reminder(db, agent_id, reminder_id)
     return _serialize(reminder, agent_id)
@@ -156,8 +158,8 @@ def trigger_reminder(
 def delete_reminder(
     agent_id: str,
     reminder_id: str,
-    db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx: PGLRequestContext = Depends(auth_context),  # noqa: B008
 ):
     reminder_service.delete_reminder(db, agent_id, reminder_id)
 
@@ -165,6 +167,7 @@ def delete_reminder(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _serialize(reminder, agent_id: str) -> dict:
     return {

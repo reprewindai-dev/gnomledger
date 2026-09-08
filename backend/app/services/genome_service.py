@@ -50,11 +50,9 @@ class GenomeService:
         )
         self.db.add(new_version)
 
-        certificate = (
-            self.db.execute(
-                select(models.BirthCertificate).where(models.BirthCertificate.agent_id == agent.id)
-            ).scalar_one()
-        )
+        certificate = self.db.execute(
+            select(models.BirthCertificate).where(models.BirthCertificate.agent_id == agent.id)
+        ).scalar_one()
         certificate.genome_hash = new_hash
 
         self.db.commit()
@@ -64,7 +62,9 @@ class GenomeService:
             LedgerEventCreate(
                 agent_id=agent.agent_id,
                 event_type="mutation_update",
-                actor=payload.changes.intended_use if payload.changes.intended_use else agent.creator,
+                actor=payload.changes.intended_use
+                if payload.changes.intended_use
+                else agent.creator,
                 summary=payload.note,
                 details={"genome_hash": new_hash, "note": payload.note},
             )

@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..schemas import AgentResponse, GenomePayload, LineageTreeNode
-from .billing_service import BillingService
 from ..utils import short_id
+from .billing_service import BillingService
 
 
 class LineageService:
@@ -79,17 +79,18 @@ class LineageService:
         self.db.add_all([new_genome, certificate, edge])
 
         # Recalculate trust snapshot and save to DB in same transaction
-        from .trust_policy import TrustPolicyV1
         from ..utils import utc_now
+        from .trust_policy import TrustPolicyV1
+
         trust_data = TrustPolicyV1.calculate_trust([])
-        
+
         snapshot = models.AgentTrustSnapshot(
             agent_id=new_agent.id,
             trust_score=trust_data["trust_score"],
             risk_tier=trust_data["risk_tier"],
             trust_policy_version=trust_data["trust_policy_version"],
             evidence_head=trust_data["evidence_head"],
-            calculated_at=utc_now()
+            calculated_at=utc_now(),
         )
         self.db.add(snapshot)
         new_agent.trust_snapshot = snapshot
@@ -119,7 +120,9 @@ class LineageService:
         if visited is None:
             visited = set()
         if agent.id in visited:
-            return LineageTreeNode(agent_id=agent.agent_id, name=agent.name, status="cycle_blocked", children=[])
+            return LineageTreeNode(
+                agent_id=agent.agent_id, name=agent.name, status="cycle_blocked", children=[]
+            )
         visited.add(agent.id)
 
         children_edges = self.db.execute(
@@ -140,6 +143,8 @@ class LineageService:
             if account is None:
                 raise ValueError("Unknown account")
             limit = self.billing_service.plan_limit(account=account, metric="lineage_render")
-            self.billing_service.ensure_or_raise(account_id=account.id, metric="lineage_render", limit=limit)
+            self.billing_service.ensure_or_raise(
+                account_id=account.id, metric="lineage_render", limit=limit
+            )
             self.billing_service.record_usage(account.id, "lineage_render", 1.0)
         return self._build_tree(agent)

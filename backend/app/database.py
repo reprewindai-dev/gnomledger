@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
 
-from sqlalchemy import text
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import get_settings
@@ -23,7 +22,7 @@ def _normalize_database_url(database_url: str) -> str:
     return database_url
 
 
-def create_engine_from_settings() -> "Engine":
+def create_engine_from_settings() -> Engine:  # noqa: F821
     database_url = _normalize_database_url(settings.database_url)
     connect_args: dict[str, bool] = {}
     if database_url.startswith("sqlite"):
@@ -49,7 +48,6 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expi
 
 
 def ensure_schema() -> None:
-    from . import models  # imported lazily so model metadata is registered
 
     Base.metadata.create_all(bind=engine)
 

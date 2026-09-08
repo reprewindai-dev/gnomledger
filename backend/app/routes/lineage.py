@@ -13,8 +13,8 @@ router = APIRouter()
 @router.post("/fork", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 def fork_agent(
     payload: LineageForkRequest,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> AgentResponse:
     service = LineageService(db)
     try:
@@ -32,8 +32,8 @@ def fork_agent(
 @router.get("/tree/{agent_id}", response_model=LineageTreeNode)
 def get_lineage_tree(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> LineageTreeNode:
     service = LineageService(db)
     try:

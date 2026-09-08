@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
 from app import models
 from app.dependencies import get_db
+from app.main import create_app
 from app.schemas import AgentCreateRequest, ApiKeyCreateRequest, GenomePayload
 from app.services.certificate_service import CertificateService
 from app.services.key_service import ApiKeyService
@@ -42,7 +42,9 @@ def test_vekml_adapter_snapshot_returns_hardened_bundle(session):
     account = _bootstrap_account(session)
     raw_key, _ = ApiKeyService(session).issue_api_key(
         account_id=account.id,
-        payload=ApiKeyCreateRequest(name="viewer", role="viewer", scopes=["*"], account_id=account.id),
+        payload=ApiKeyCreateRequest(
+            name="viewer", role="viewer", scopes=["*"], account_id=account.id
+        ),
     )
     created = _issue_agent(session, account)
 
@@ -65,7 +67,10 @@ def test_vekml_adapter_snapshot_returns_hardened_bundle(session):
     assert body["certificate"]["certificate_id"] == created.certificate_id
     assert body["chain_verification"]["valid"] is True
     assert len(body["ledger_events"]) >= 1
-    assert {row["metric"] for row in body["usage_limits"]} == {"certificate_issuance", "lineage_render"}
+    assert {row["metric"] for row in body["usage_limits"]} == {
+        "certificate_issuance",
+        "lineage_render",
+    }
     assert body["snapshot_hash"]
 
 
@@ -77,7 +82,9 @@ def test_vekml_adapter_snapshot_respects_account_scope(session):
 
     raw_key, _ = ApiKeyService(session).issue_api_key(
         account_id=account.id,
-        payload=ApiKeyCreateRequest(name="viewer-scope", role="viewer", scopes=["*"], account_id=account.id),
+        payload=ApiKeyCreateRequest(
+            name="viewer-scope", role="viewer", scopes=["*"], account_id=account.id
+        ),
     )
     created = _issue_agent(session, other)
 

@@ -10,7 +10,6 @@ from ..schemas import (
     CertificateDownloadResponse,
     GenomePayload,
     LedgerChainVerifyRequest,
-    LedgerEventResponse,
     VeklmAdapterSnapshot,
 )
 from ..utils import stable_hash, utc_now
@@ -59,7 +58,7 @@ class AdapterService:
         base_score = 50.0
         events = agent.ledger_events
         evidence_head = events[-1].event_hash if events else None
-        
+
         for event in events:
             if event.event_type == "birth_registration":
                 base_score = max(base_score, 50.0)
@@ -69,9 +68,9 @@ class AdapterService:
                 base_score += event.details.get("score", 0) / 10.0
             elif event.event_type == "violation":
                 base_score -= 20.0
-                
+
         base_score = max(0.0, min(100.0, base_score))
-        
+
         if base_score >= 90:
             risk_tier = "production"
         elif base_score >= 70:
@@ -109,7 +108,9 @@ class AdapterService:
         ledger_events = self.ledger_service.get_agent_history(agent_id=agent.agent_id, limit=500)
         _, verify_payload = self.ledger_service.verify_chain(agent.agent_id)
         chain_verification = LedgerChainVerifyRequest(**verify_payload)
-        lineage = self.lineage_service.get_tree(account_id=account_id, agent_id=agent.agent_id, count_usage=False)
+        lineage = self.lineage_service.get_tree(
+            account_id=account_id, agent_id=agent.agent_id, count_usage=False
+        )
 
         account = self.db.get(models.Account, account_id)
         if account is None:

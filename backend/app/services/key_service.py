@@ -59,15 +59,19 @@ class ApiKeyService:
     def list_api_keys(self, account_id: int) -> list[models.ApiKey]:
         return list(
             self.db.execute(
-                select(models.ApiKey).where(models.ApiKey.account_id == account_id).order_by(models.ApiKey.id.asc())
+                select(models.ApiKey)
+                .where(models.ApiKey.account_id == account_id)
+                .order_by(models.ApiKey.id.asc())
             ).scalars()
         )
 
     def revoke_api_key(self, account_id: int, api_key_id: int) -> None:
         key = self.db.execute(
-            select(models.ApiKey).where(models.ApiKey.id == api_key_id, models.ApiKey.account_id == account_id)
+            select(models.ApiKey).where(
+                models.ApiKey.id == api_key_id, models.ApiKey.account_id == account_id
+            )
         ).scalar_one_or_none()
         if not key:
             raise ValueError("Unknown API key")
-        key.revoked_at = datetime.utcnow()
+        key.revoked_at = datetime.utcnow()  # noqa: DTZ003
         self.db.commit()

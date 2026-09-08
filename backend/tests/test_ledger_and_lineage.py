@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from app import models
-from app.schemas import AgentCreateRequest, GenomePayload, LineageForkRequest, LedgerEventCreate
+from app.schemas import (
+    AgentCreateRequest,
+    GenomePayload,
+    LedgerEventCreate,
+)
 from app.services.certificate_service import CertificateService
-from app.services.genome_service import GenomeService
-from app.services.lineage_service import LineageService
 from app.services.ledger_service import LedgerService
-from app.schemas import GenomeUpdateRequest
+from app.services.lineage_service import LineageService
 from app.utils import short_id
 
 

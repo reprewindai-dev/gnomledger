@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
@@ -27,7 +27,9 @@ def _account_from_token(db: Session, api_key: str) -> PGLRequestContext:
     settings = get_settings()
     if not api_key:
         if settings.allow_anonymous_in_dev and settings.environment == "dev":
-            account = db.execute(select(Account).where(Account.tier == "launch")).scalar_one_or_none()
+            account = db.execute(
+                select(Account).where(Account.tier == "launch")
+            ).scalar_one_or_none()
             if not account:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -53,7 +55,7 @@ def _account_from_token(db: Session, api_key: str) -> PGLRequestContext:
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if row.expires_at and row.expires_at <= now:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key expired")
     if row.revoked_at is not None:
@@ -66,7 +68,7 @@ def _account_from_token(db: Session, api_key: str) -> PGLRequestContext:
 
 def auth_context(
     x_api_key: Annotated[str | None, Header(alias="x-api-key")] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ) -> PGLRequestContext:
     return _account_from_token(db, x_api_key)
 

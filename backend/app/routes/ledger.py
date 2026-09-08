@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_db, require_role
-from ..pgl.evidence_validator import PGLEvidenceValidator
 from ..pgl.errors import PGLEvidenceError
+from ..pgl.evidence_validator import PGLEvidenceValidator
 from ..public_proof import PublicLedgerProofResponse, to_public_ledger_proof
 from ..schemas import LedgerChainVerifyRequest, LedgerEventCreate, LedgerEventResponse
 from ..services.ledger_service import LedgerService
@@ -16,8 +16,8 @@ router = APIRouter()
 @router.post("/events", response_model=LedgerEventResponse, status_code=status.HTTP_201_CREATED)
 def create_ledger_event(
     payload: LedgerEventCreate,
-    db: Session = Depends(get_db),
-    _ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    _ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> LedgerEventResponse:
     # RTV-1B: WID-5 Identity Chain Enforcement
     # LedgerEventCreate validates that details matches PreExecutionAuthorizationDetails /
@@ -50,8 +50,8 @@ def get_agent_history(
     agent_id: str,
     limit: int = Query(default=200, ge=1, le=500),
     cursor: int | None = Query(default=None, ge=1),
-    db: Session = Depends(get_db),
-    _ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    _ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> list[LedgerEventResponse]:
     service = LedgerService(db)
     try:
@@ -63,8 +63,8 @@ def get_agent_history(
 @router.get("/agents/{agent_id}/verify", response_model=LedgerChainVerifyRequest)
 def verify_agent_chain(
     agent_id: str,
-    db: Session = Depends(get_db),
-    _ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    _ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> LedgerChainVerifyRequest:
     service = LedgerService(db)
     try:
@@ -77,7 +77,7 @@ def verify_agent_chain(
 @router.get("/proof/{hash}", response_model=PublicLedgerProofResponse)
 def get_event_by_hash(
     hash: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
     # Public route - intentionally no auth. Response is limited to non-sensitive
     # hash lookup metadata and does not expose the underlying event payload.
 ) -> PublicLedgerProofResponse:

@@ -15,6 +15,7 @@ from .billing_service import BillingService
 
 _settings = get_settings()
 
+
 class CertificateService:
     def __init__(self, db: Session):
         self.db = db
@@ -22,14 +23,18 @@ class CertificateService:
         self.analytics_service = AnalyticsService(db)
 
     def _get_account(self, account_id: int) -> models.Account:
-        account = self.db.execute(select(models.Account).where(models.Account.id == account_id)).scalar_one_or_none()
+        account = self.db.execute(
+            select(models.Account).where(models.Account.id == account_id)
+        ).scalar_one_or_none()
         if not account:
             raise ValueError("Unknown account")
         if account.status != "active":
             raise ValueError("Account is not active")
         return account
 
-    def _assert_parent_agents_exist(self, account_id: int, parent_ids: list[str]) -> list[models.Agent]:
+    def _assert_parent_agents_exist(
+        self, account_id: int, parent_ids: list[str]
+    ) -> list[models.Agent]:
         if not parent_ids:
             return []
         stmt = (
@@ -141,15 +146,16 @@ class CertificateService:
 
         # Recalculate trust snapshot and save to DB in same transaction
         from .trust_policy import TrustPolicyV1
+
         trust_data = TrustPolicyV1.calculate_trust([ledger_event])
-        
+
         snapshot = models.AgentTrustSnapshot(
             agent_id=agent.id,
             trust_score=trust_data["trust_score"],
             risk_tier=trust_data["risk_tier"],
             trust_policy_version=trust_data["trust_policy_version"],
             evidence_head=trust_data["evidence_head"],
-            calculated_at=utc_now()
+            calculated_at=utc_now(),
         )
         self.db.add(snapshot)
         agent.trust_snapshot = snapshot

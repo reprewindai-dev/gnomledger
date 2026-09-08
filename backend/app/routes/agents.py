@@ -4,44 +4,48 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import models
 from ..dependencies import get_db, require_role
 from ..schemas import (
-    CertificateDownloadResponse,
     AgentCreateRequest,
     AgentDetailResponse,
     AgentResponse,
-    GenomePayload,
-    GenomeUpdateRequest,
+    CertificateDownloadResponse,
     ExecutionValidateRequest,
     ExecutionValidateResponse,
+    GenomePayload,
+    GenomeUpdateRequest,
 )
 from ..services.certificate_service import CertificateService
 from ..services.genome_service import GenomeService
-from .. import models
 
-router = APIRouter()
+router = APIRouter(prefix="/agents")
 
 
-@router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 def create_agent(
     payload: AgentCreateRequest,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> AgentResponse:
     service = CertificateService(db)
     try:
         return service.register_agent(payload, account_id=ctx.account_id)
     except ValueError as exc:
-        status_code = status.HTTP_402_PAYMENT_REQUIRED if "quota" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
+        status_code = (
+            status.HTTP_402_PAYMENT_REQUIRED
+            if "quota" in str(exc).lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
-@router.get("/", response_model=list[AgentDetailResponse])
+@router.get("", response_model=list[AgentDetailResponse])
 def list_agents(
     limit: int = Query(default=100, ge=1, le=200),
     cursor: int | None = Query(default=None, ge=1),
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> list[AgentDetailResponse]:
     stmt = (
         select(models.Agent)
@@ -68,6 +72,7 @@ def list_agents(
             evidence_head = snapshot.evidence_head
         else:
             from ..services.trust_policy import TrustPolicyV1
+
             trust_data = TrustPolicyV1.calculate_trust(row.ledger_events)
             trust_score = trust_data["trust_score"]
             risk_tier = trust_data["risk_tier"]
@@ -101,12 +106,13 @@ def list_agents(
 @router.get("/{agent_id}", response_model=AgentDetailResponse)
 def get_agent(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> AgentDetailResponse:
     agent = db.execute(
-        select(models.Agent)
-        .where(models.Agent.account_id == ctx.account_id, models.Agent.agent_id == agent_id)
+        select(models.Agent).where(
+            models.Agent.account_id == ctx.account_id, models.Agent.agent_id == agent_id
+        )
     ).scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown agent_id")
@@ -131,6 +137,7 @@ def get_agent(
         evidence_head = snapshot.evidence_head
     else:
         from ..services.trust_policy import TrustPolicyV1
+
         trust_data = TrustPolicyV1.calculate_trust(agent.ledger_events)
         trust_score = trust_data["trust_score"]
         risk_tier = trust_data["risk_tier"]
@@ -161,12 +168,13 @@ def get_agent(
 @router.get("/{agent_id}/certificate", response_model=CertificateDownloadResponse)
 def get_certificate(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> CertificateDownloadResponse:
     agent = db.execute(
-        select(models.Agent)
-        .where(models.Agent.account_id == ctx.account_id, models.Agent.agent_id == agent_id)
+        select(models.Agent).where(
+            models.Agent.account_id == ctx.account_id, models.Agent.agent_id == agent_id
+        )
     ).scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown agent_id")
@@ -184,8 +192,8 @@ def get_certificate(
 def update_genome(
     agent_id: str,
     payload: GenomeUpdateRequest,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> GenomePayload:
     service = GenomeService(db)
     try:
@@ -205,18 +213,20 @@ def update_genome(
 @router.post("/{agent_id}/trust/rebuild", response_model=AgentDetailResponse)
 def rebuild_agent_trust(
     agent_id: str,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("operator", "admin", "owner")),  # noqa: B008
 ) -> AgentDetailResponse:
     agent = db.execute(
-        select(models.Agent)
-        .where(models.Agent.account_id == ctx.account_id, models.Agent.agent_id == agent_id)
+        select(models.Agent).where(
+            models.Agent.account_id == ctx.account_id, models.Agent.agent_id == agent_id
+        )
     ).scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown agent_id")
 
     from ..services.trust_policy import TrustPolicyV1
     from ..utils import utc_now
+
     trust_data = TrustPolicyV1.calculate_trust(agent.ledger_events)
 
     snapshot = agent.trust_snapshot
@@ -271,14 +281,13 @@ def rebuild_agent_trust(
 @router.post("/execution/validate", response_model=ExecutionValidateResponse)
 def validate_execution(
     payload: ExecutionValidateRequest,
-    db: Session = Depends(get_db),
-    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
+    db: Session = Depends(get_db),  # noqa: B008
+    ctx=Depends(require_role("viewer", "operator", "admin", "owner")),  # noqa: B008
 ) -> ExecutionValidateResponse:
     agent = db.execute(
-        select(models.Agent)
-        .where(models.Agent.agent_id == payload.agent_id)
+        select(models.Agent).where(models.Agent.agent_id == payload.agent_id)
     ).scalar_one_or_none()
-    
+
     if not agent:
         return ExecutionValidateResponse(
             allowed=False,
@@ -295,7 +304,9 @@ def validate_execution(
         return ExecutionValidateResponse(
             allowed=False,
             agent_certificate_id=agent.certificate.certificate_id if agent.certificate else None,
-            canonical_genome_hash=agent.genome_versions[-1].genome_hash if agent.genome_versions else None,
+            canonical_genome_hash=agent.genome_versions[-1].genome_hash
+            if agent.genome_versions
+            else None,
             trust_score=0.0,
             risk_tier="terminated",
             trust_policy_version="v1",
@@ -307,13 +318,15 @@ def validate_execution(
         return ExecutionValidateResponse(
             allowed=False,
             agent_certificate_id=agent.certificate.certificate_id if agent.certificate else None,
-            canonical_genome_hash=agent.genome_versions[-1].genome_hash if agent.genome_versions else None,
+            canonical_genome_hash=agent.genome_versions[-1].genome_hash
+            if agent.genome_versions
+            else None,
             trust_score=0.0,
             risk_tier="terminated",
             trust_policy_version="v1",
             evidence_head=None,
         )
-    
+
     if not agent.workspace_id:
         agent.workspace_id = payload.workspace_id
         db.commit()
@@ -335,7 +348,9 @@ def validate_execution(
         if tool not in allowed_tools:
             return ExecutionValidateResponse(
                 allowed=False,
-                agent_certificate_id=agent.certificate.certificate_id if agent.certificate else None,
+                agent_certificate_id=agent.certificate.certificate_id
+                if agent.certificate
+                else None,
                 canonical_genome_hash=latest_version.genome_hash,
                 trust_score=0.0,
                 risk_tier="terminated",
@@ -351,6 +366,7 @@ def validate_execution(
         evidence_head = snapshot.evidence_head
     else:
         from ..services.trust_policy import TrustPolicyV1
+
         trust_data = TrustPolicyV1.calculate_trust(agent.ledger_events)
         trust_score = trust_data["trust_score"]
         risk_tier = trust_data["risk_tier"]

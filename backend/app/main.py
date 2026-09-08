@@ -9,8 +9,8 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 try:
     from veklom_amphoteric import AmphotericRouter, create_mcp_endpoints
@@ -25,7 +25,6 @@ from .routes.health_dependencies import router as health_dependencies_router
 from .routes.protocol import router as protocol_router
 from .schemas import ErrorResponse, HealthResponse
 from .utils import utc_now
-
 
 logger = logging.getLogger(__name__)
 DATABASE_RETRY_SECONDS = 90
@@ -54,7 +53,7 @@ async def lifespan(app: FastAPI):
                 app.state.database_error = None
                 logger.info("PGL database schema is ready")
                 return
-            except Exception as exc:  # pragma: no cover - exact DB driver errors vary by deployment
+            except Exception as exc:  # pragma: no cover - exact DB driver errors vary by deployment  # noqa: BLE001
                 app.state.database_ready = False
                 app.state.database_error = str(exc)
                 if time.monotonic() >= deadline:
@@ -96,7 +95,7 @@ def _build_app() -> FastAPI:
         version="1.1.0",
         lifespan=lifespan,
     )
-    
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["https://veklom.com", "https://api.veklom.com"],
@@ -104,7 +103,7 @@ def _build_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     app.include_router(create_api_router())
     app.include_router(protocol_router)
     app.include_router(health_dependencies_router)
@@ -117,7 +116,9 @@ def _build_app() -> FastAPI:
             "Compute an experimental content digest; this does not anchor or prove settlement evidence",
         )
         def validate_settlement_evidence_structure(payload: dict) -> dict:
-            payload_bytes = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            payload_bytes = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
             content_digest = hashlib.sha256(payload_bytes).hexdigest()
             return {
                 "status": "EXPERIMENTAL_STRUCTURE_VALIDATION",
@@ -144,7 +145,7 @@ def _build_app() -> FastAPI:
             if content_length > 10 * 1024 * 1024:
                 return JSONResponse(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    content={"detail": "Request too large"}
+                    content={"detail": "Request too large"},
                 )
         return await call_next(request)
 
@@ -160,7 +161,7 @@ def _build_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(_: Request, exc: Exception):
-        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+        logger.error(f"Unhandled exception: {exc}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse(detail="Internal Server Error").model_dump(),
@@ -174,6 +175,7 @@ def _build_app() -> FastAPI:
         )
 
     @app.get("/health/live", tags=["health"], response_model=HealthResponse)
+    @app.get("/healthz", tags=["health"], response_model=HealthResponse)
     async def liveness_check():
         return HealthResponse(status="ok", timestamp=utc_now())
 
@@ -189,6 +191,7 @@ def _build_app() -> FastAPI:
         )
 
     @app.get("/health/ready", tags=["health"], response_model=HealthResponse)
+    @app.get("/readyz", tags=["health"], response_model=HealthResponse)
     async def readiness_check():
         if getattr(app.state, "database_ready", False):
             return HealthResponse(status="ok", timestamp=utc_now(), database="ready")
