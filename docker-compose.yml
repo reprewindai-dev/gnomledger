@@ -1,25 +1,14 @@
 services:
   api:
     build: .
-    ports:
-<<<<<<< Updated upstream
-      - "8001:8001"
-    labels:
-      - "traefik.http.services.gnom.loadbalancer.server.port=8001"
-=======
-      - "127.0.0.1:8001:8001"
->>>>>>> Stashed changes
     env_file:
       - .env
     volumes:
       - ./data:/app/data
     command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8001
-<<<<<<< Updated upstream
     networks:
-      - coolify
+      - veklom-internal
 
 networks:
-  coolify:
+  veklom-internal:
     external: true
-=======
->>>>>>> Stashed changes
