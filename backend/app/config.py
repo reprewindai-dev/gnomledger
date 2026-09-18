@@ -39,6 +39,9 @@ class Settings(BaseSettings):
 
     api_key_secret: str = "change-this-secret-in-prod"
     bootstrap_admin_token: str = "dev-bootstrap-token"
+    pgl_ledger_api_key: str | None = Field(default=None, repr=False)
+    bootstrap_account_name: str = "Veklom Capability OS"
+    bootstrap_admin_name: str = "capability-os-runtime"
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     allow_anonymous_in_dev: bool = False
@@ -71,6 +74,20 @@ class Settings(BaseSettings):
         minimum = 32 if environment == "prod" else 16
         if not value or len(value) < minimum:
             raise ValueError(f"api_key_secret must be at least {minimum} characters")
+        return value
+
+    @field_validator("pgl_ledger_api_key")
+    @classmethod
+    def _validate_runtime_api_key(cls, value: str | None, info) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        environment = (info.data.get("environment") or "dev").lower()
+        minimum = 32 if environment == "prod" else 16
+        if len(value) < minimum:
+            raise ValueError(
+                f"pgl_ledger_api_key must be at least {minimum} characters"
+            )
         return value
 
 

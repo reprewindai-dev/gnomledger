@@ -20,11 +20,13 @@ except ImportError:  # Optional integration is not present in a clean checkout.
 
 from .config import get_settings
 from .database import check_database, init_database
+from .database import SessionLocal
 from .routes import create_api_router
 from .routes.health_dependencies import router as health_dependencies_router
 from .routes.protocol import router as protocol_router
 from .schemas import ErrorResponse, HealthResponse
 from .utils import utc_now
+from .services.bootstrap_service import ensure_runtime_bootstrap
 
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,11 @@ async def lifespan(app: FastAPI):
             try:
                 await asyncio.to_thread(init_database)
                 await asyncio.to_thread(check_database)
+                def verify_runtime_principal() -> None:
+                    with SessionLocal() as db:
+                        ensure_runtime_bootstrap(db, get_settings())
+
+                await asyncio.to_thread(verify_runtime_principal)
                 app.state.database_ready = True
                 app.state.database_error = None
                 logger.info("PGL database schema is ready")
