@@ -6,6 +6,9 @@ from ..models import LedgerEvent
 class TrustPolicyV1:
     """Canonical V1 trust policy logic for Gnomledger agents."""
 
+    # Event types that change the score in calculate_trust; every other type is a no-op there.
+    SCORING_EVENT_TYPES = ("birth_registration", "deployment", "test_audit", "violation")
+
     @staticmethod
     def calculate_trust(events: list[LedgerEvent]) -> dict[str, Any]:
         """Calculate trust score based on V1 rules."""

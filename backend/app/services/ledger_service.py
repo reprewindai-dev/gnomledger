@@ -27,8 +27,15 @@ class LedgerService:
         return self.db.execute(stmt).scalar_one_or_none()
 
     def log_event(self, payload: LedgerEventCreate) -> LedgerEventResponse:
+        # Appends to one agent's chain are serialized on the agent row. Without the lock two
+        # concurrent appends read the same chain head and both link to it, forking the chain
+        # (observed: lineage-reformation run lre-20261005T001846Z, verify "blocked").
+        # populate_existing: the locked read must return the committed row, not a cached one.
         agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == payload.agent_id)
+            select(models.Agent)
+            .where(models.Agent.agent_id == payload.agent_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalar_one_or_none()
         if not agent:
             raise ValueError("Unknown agent_id")
@@ -86,11 +93,23 @@ class LedgerService:
 
         # Recalculate trust snapshot and save to DB in same transaction
         from .trust_policy import TrustPolicyV1
-        all_events = list(agent.ledger_events)
-        if event not in all_events:
-            all_events.append(event)
 
-        trust_data = TrustPolicyV1.calculate_trust(all_events)
+        # Only these event types move the V1 trust score, so only they are loaded (in chain
+        # order). Loading the agent's whole history on every append made each append O(n).
+        scoring_events = list(
+            self.db.execute(
+                select(models.LedgerEvent)
+                .where(
+                    models.LedgerEvent.agent_id == agent.id,
+                    models.LedgerEvent.event_type.in_(TrustPolicyV1.SCORING_EVENT_TYPES),
+                )
+                .order_by(models.LedgerEvent.created_at.asc(), models.LedgerEvent.id.asc())
+            ).scalars()
+        )
+        if event not in scoring_events:
+            scoring_events.append(event)  # last element supplies evidence_head
+
+        trust_data = TrustPolicyV1.calculate_trust(scoring_events)
         
         snapshot = agent.trust_snapshot
         if not snapshot:
