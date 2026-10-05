@@ -25,12 +25,14 @@ def _normalize_database_url(database_url: str) -> str:
 
 def create_engine_from_settings() -> Engine:
     database_url = _normalize_database_url(settings.database_url)
-    connect_args: dict[str, bool] = {}
+    connect_args: dict[str, bool | float] = {}
     if database_url.startswith("sqlite"):
         sqlite_path = database_url.removeprefix("sqlite:///")
         if sqlite_path and sqlite_path != ":memory:":
             Path(sqlite_path).parent.mkdir(parents=True, exist_ok=True)
         connect_args["check_same_thread"] = False
+        # Ledger appends queue on the database write lock; wait for it rather than fail.
+        connect_args["timeout"] = 30.0
     return create_engine(
         database_url,
         echo=False,

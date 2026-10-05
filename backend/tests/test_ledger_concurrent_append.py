@@ -4,8 +4,9 @@ Lineage-reformation run lre-20261005T001846Z: two CAPPO requests appended to the
 agent ~100 ms apart, both read the same chain head, and verify returned "blocked"
 (event_hash mismatch / chain break). Appends are now serialized on the agent row.
 
-Needs a real Postgres (row locks); set PGL_TEST_POSTGRES_URL to run it. SQLite ignores
-FOR UPDATE, so the sequential tests cover that backend.
+The SQLite case always runs: SQLite ignores FOR UPDATE and the deployed ledger runs on
+SQLite, so there the append takes the database write lock before it reads the chain head.
+The Postgres case (row locks) needs PGL_TEST_POSTGRES_URL.
 """
 
 from __future__ import annotations
@@ -23,14 +24,22 @@ from app.services.certificate_service import CertificateService
 from app.services.ledger_service import LedgerService
 
 POSTGRES_URL = os.environ.get("PGL_TEST_POSTGRES_URL")
-pytestmark = pytest.mark.skipif(not POSTGRES_URL, reason="PGL_TEST_POSTGRES_URL not set")
 
 WRITERS = 8
 APPENDS_PER_WRITER = 25
 
 
-def test_concurrent_appends_keep_one_chain() -> None:
-    engine = create_engine(POSTGRES_URL, pool_size=WRITERS + 2, future=True)
+@pytest.mark.skipif(not POSTGRES_URL, reason="PGL_TEST_POSTGRES_URL not set")
+def test_concurrent_appends_keep_one_chain_postgres() -> None:
+    _assert_one_chain(create_engine(POSTGRES_URL, pool_size=WRITERS + 2, future=True))
+
+
+def test_concurrent_appends_keep_one_chain_sqlite(tmp_path) -> None:
+    url = f"sqlite:///{(tmp_path / 'pgl.sqlite3').as_posix()}"
+    _assert_one_chain(create_engine(url, connect_args={"check_same_thread": False}, future=True))
+
+
+def _assert_one_chain(engine) -> None:
     models.Base.metadata.drop_all(bind=engine)
     models.Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)

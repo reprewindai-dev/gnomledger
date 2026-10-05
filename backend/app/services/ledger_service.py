@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterable
 
 from sqlalchemy import select
@@ -10,6 +11,8 @@ from .. import models
 from ..schemas import LedgerEventCreate, LedgerEventResponse
 from ..utils import canonical_timestamp, short_id, stable_hash, utc_now
 from .analytics_service import AnalyticsService
+
+_SQLITE_APPEND_LOCK = threading.Lock()
 
 
 class LedgerService:
@@ -27,6 +30,26 @@ class LedgerService:
         return self.db.execute(stmt).scalar_one_or_none()
 
     def log_event(self, payload: LedgerEventCreate) -> LedgerEventResponse:
+        connection = self.db.connection()
+        if connection.dialect.name != "sqlite":
+            return self._append_event(payload)
+        # SQLite has no row locks and ignores FOR UPDATE, and the driver opens a transaction
+        # only at the first write, after the chain head has been read. So the append takes
+        # the database write lock before that read (this also covers other processes). The
+        # process lock queues this process's writers; SQLite's own lock wait is an unfair
+        # retry loop that times writers out under sustained contention. An open transaction
+        # means this session has already written and holds the database lock.
+        with _SQLITE_APPEND_LOCK:
+            try:
+                if not connection.connection.dbapi_connection.in_transaction:
+                    connection.exec_driver_sql("BEGIN IMMEDIATE")
+                return self._append_event(payload)
+            finally:
+                # Never leave the process lock while still holding the database lock.
+                if self.db.in_transaction():
+                    self.db.rollback()
+
+    def _append_event(self, payload: LedgerEventCreate) -> LedgerEventResponse:
         # Appends to one agent's chain are serialized on the agent row. Without the lock two
         # concurrent appends read the same chain head and both link to it, forking the chain
         # (observed: lineage-reformation run lre-20261005T001846Z, verify "blocked").
