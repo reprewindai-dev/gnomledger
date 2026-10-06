@@ -15,7 +15,9 @@ from ..schemas import (
     LedgerEventResponse,
     PGLRequestContext,
 )
+from ..services.audit_bundle_service import AuditBundleService
 from ..services.ledger_service import LedgerService
+from ..services.principal import describe_principal
 from ..services.signing_service import get_signer
 
 router = APIRouter()
@@ -105,6 +107,23 @@ def get_agent_checkpoint(
     try:
         return LedgerCheckpoint(
             **LedgerService(db).issue_checkpoint(agent_id, account_id=ctx.account_id)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/agents/{agent_id}/audit-bundle")
+def get_agent_audit_bundle(
+    agent_id: str,
+    db: DbSession,
+    ctx: ViewerContext,
+) -> dict:
+    """One signed JSON document for an auditor: agent, every genome version, the signed
+    certificate, the full event chain, a fresh signed checkpoint, verification results and
+    the public signing key. bundle_signature covers every other field."""
+    try:
+        return AuditBundleService(db).build(
+            agent_id, account_id=ctx.account_id, generated_by=describe_principal(db, ctx)
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
