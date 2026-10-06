@@ -22,6 +22,7 @@ The repository is structured as a deployable module that can be integrated into 
 - [Architecture](docs/architecture.md)
 - [Deployment Operations](docs/deployment-operations.md)
 - [Security Compliance](docs/security-compliance.md)
+- [Audit Readiness](docs/AUDIT_READINESS.md)
 
 ## Repository Contents
 
@@ -112,23 +113,35 @@ Copy `.env.example` and set at least:
 - `BOOTSTRAP_ADMIN_TOKEN`
 - `DATABASE_URL`
 - `STRIPE_WEBHOOK_SECRET` if webhook ingestion is enabled
+- `PGL_SIGNING_KEY_PEM` (PKCS#8 Ed25519 PEM; `\n` escapes accepted) or `PGL_SIGNING_KEY_PATH`
+  (path to that PEM). Required when `ENVIRONMENT=prod`: the service refuses to start without
+  a loadable Ed25519 key. In dev/staging a key is generated once under the data directory
+  (`data/keys/pgl-signing-key.pem`). Generate one with
+  `openssl genpkey -algorithm ed25519 -out pgl-signing-key.pem`. Never commit it.
 
 ## API Surface
 
-All API endpoints are rooted at `/api/v1`.
+All API endpoints are rooted at `/api/v1` unless shown with a leading `/.well-known`.
 
-- `POST /admin/bootstrap`
+- `POST /admin/bootstrap` (optional `admin_full_name`: the operator's real name, used for agent handles)
 - `POST /admin/accounts/{account_id}/keys`
 - `GET /admin/accounts/{account_id}/keys`
 - `DELETE /admin/accounts/{account_id}/keys/{api_key_id}`
-- `POST /agents`
+- `POST /agents` registers a kind of agent (see "Agent registration" below)
 - `GET /agents`
 - `GET /agents/{agent_id}`
-- `GET /agents/{agent_id}/certificate`
-- `PATCH /agents/{agent_id}/genome`
+- `GET /agents/{agent_id}/certificate` returns the signed birth certificate
+- `PATCH /agents/{agent_id}/genome` (requires `reason`)
+- `POST /agents/{agent_id}/decommission` (requires `reason`; keeps every record)
+- `POST /agents/execution/validate` (optional `model_used`, must be a declared model)
 - `POST /ledger/events`
 - `GET /ledger/agents/{agent_id}`
 - `GET /ledger/agents/{agent_id}/verify`
+- `GET /ledger/agents/{agent_id}/checkpoint` returns a signed chain checkpoint
+- `POST /ledger/checkpoints/verify` (public) checks a held checkpoint for truncation or rewrite
+- `GET /ledger/agents/{agent_id}/audit-bundle` returns the signed audit bundle
+- `GET /ledger/signing-key` and `GET /.well-known/pgl-signing-key` (public) publish the
+  Ed25519 public key (PEM + JWK + key id)
 - `POST /lineage/fork`
 - `GET /lineage/tree/{agent_id}`
 - `GET /billing/usage`
@@ -140,6 +153,57 @@ The `/admin`, `/agents` and `/billing` routers were historically also mounted wi
 prefix (for example `GET /api/v1/{agent_id}` and `GET /api/v1/usage`). Those legacy paths are
 still served for existing callers but are not in the OpenAPI schema; new integrations should
 use the prefixed paths above.
+
+### Agent registration
+
+`POST /api/v1/agents` registers the identity of a *kind* of agent once; each task is an
+ephemeral execution that cites it. Every field added for audit readiness is optional, so the
+original request shape still works; the signed certificate lists what was left out in
+`missing_accountability_fields` and `missing_integrity_fields`. Field-by-field meaning is in
+[docs/AUDIT_READINESS.md](docs/AUDIT_READINESS.md).
+
+```json
+{
+  "agent_name": "optional; defaults to the server handle, e.g. AM-133f1339-17",
+  "creator": "optional; defaults to the authenticated operator",
+  "jurisdiction": "EU",
+  "parent_agent_ids": [],
+  "genome": {
+    "intended_use": "Triage inbound insurance claims",
+    "risk_category": "medium",
+    "industry": "insurance",
+    "run_mode": "human_in_the_loop",
+    "accountable_owner": {"name": "...", "role": "...", "email": "...", "organization": "..."},
+    "incident_contact": "security@example.com or https://...",
+    "deployer": "Example Insurance Ltd",
+    "provider": "Example Insurance Ltd",
+    "capability_refs": ["veklom.governed-counter@v1"],
+    "permissions": ["declarative only"],
+    "tools": ["browser"],
+    "safety_rules": [],
+    "out_of_scope_uses": ["..."],
+    "known_limitations": ["..."],
+    "data_categories": ["personal", "financial"],
+    "log_retention_days": 180,
+    "regulatory_risk_class": "high_risk",
+    "risk_rationale": "...",
+    "oversight": {"stop_mechanism": "CAPPO terminate", "oversight_contact": "...", "escalation_path": "..."},
+    "declared_models": [{"provider": "Anthropic", "identifier": "claude-opus-5-5", "role": "planner"}],
+    "system_prompt_sha256": "<64 hex>",
+    "code_commit": "<7-64 hex>",
+    "image_digest": "repo@sha256:<64 hex>",
+    "tool_versions": {"browser": "1.4.2"},
+    "runtime_config": {}
+  }
+}
+```
+
+The single-model fields `model_family` + `model_version` (+ `architecture`, `model_provider`,
+`model_identifier`) are still accepted and read as one declared model; one of the two forms
+is required. `log_retention_days` below 180 is refused. `system_prompt` text is refused; send
+its SHA-256. The response adds `agent_handle` and `certificate` (`signature_status`,
+`certificate`, `signature {algorithm, key_id, value}`, `key_id`,
+`missing_accountability_fields`, `missing_integrity_fields`, `current_genome_hash`).
 
 ## Deploy on Vercel
 

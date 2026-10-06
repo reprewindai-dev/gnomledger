@@ -7,4 +7,5 @@
 - [Deployment Operations](deployment-operations.md)
 - [Revenue Model](revenue-model.md)
 - [Security Compliance](security-compliance.md)
+- [Audit Readiness](AUDIT_READINESS.md)
 - [Roadmap](roadmap.md)

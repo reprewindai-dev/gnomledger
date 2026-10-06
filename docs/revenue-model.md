@@ -13,7 +13,7 @@ Project Genome Ledger (PGL) monetizes the accountability layer for AI systems by
 
 - **Regulatory Readiness:** Automated issuance of AI birth certificates, lineage tracking, and ledger exports that align with EU AI Act, NIST AI RMF, ISO/IEC 42001, and internal policy audits.
 - **Operational Control:** Per-agent lifecycle policies, incident logging, deployment attestations, and chargeback visibility across business units.
-- **Investor-Grade Accountability:** Demonstrates governance maturity to stakeholders by exposing tamper-evident, hash-chained histories (unsigned and not externally anchored) and verifiable lineage trees.
+- **Investor-Grade Accountability:** Demonstrates governance maturity to stakeholders by exposing tamper-evident, hash-chained histories (with Ed25519-signed birth certificates and chain checkpoints, but no external anchoring) and verifiable lineage trees.
 
 ## Pricing Tiers
 
