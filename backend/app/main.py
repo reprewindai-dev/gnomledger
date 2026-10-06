@@ -112,6 +112,22 @@ def _build_app() -> FastAPI:
         allow_headers=["*"],
     )
     
+    # Registered before the API router: routes match in order, and the legacy agents mount
+    # ends with a GET /api/v1/{agent_id} catch-all that would otherwise capture this path.
+    @app.get("/api/v1/capabilities", tags=["discovery"])
+    async def capabilities_check():
+        return {
+            "service": "gnomledger",
+            "contract_version": "pgl-execution-v1",
+            "event_types": [
+                "pre_execution_authorization",
+                "post_execution_attestation",
+                "violation",
+            ],
+            "supports_idempotency": True,
+            "supports_chain_verification": True,
+        }
+
     app.include_router(create_api_router())
     app.include_router(protocol_router)
     app.include_router(health_dependencies_router)
@@ -208,20 +224,6 @@ def _build_app() -> FastAPI:
                 detail="database unavailable",
             ).model_dump(mode="json"),
         )
-
-    @app.get("/api/v1/capabilities", tags=["discovery"])
-    async def capabilities_check():
-        return {
-            "service": "gnomledger",
-            "contract_version": "pgl-execution-v1",
-            "event_types": [
-                "pre_execution_authorization",
-                "post_execution_attestation",
-                "violation",
-            ],
-            "supports_idempotency": True,
-            "supports_chain_verification": True,
-        }
 
     @app.get("/.well-known/x402.json", tags=["discovery"])
     async def x402_discovery():

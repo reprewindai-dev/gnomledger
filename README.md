@@ -96,6 +96,7 @@ The bootstrap response contains `api_key`. Pass it in the `x-api-key` header for
 4. Issue an agent through the UI or `POST /api/v1/agents`.
 5. Verify the issued asset through:
    - `GET /api/v1/agents`
+   - `GET /api/v1/agents/{agent_id}`
    - `GET /api/v1/ledger/agents/{agent_id}`
    - `GET /api/v1/ledger/agents/{agent_id}/verify`
    - `GET /api/v1/lineage/tree/{agent_id}`
@@ -134,6 +135,11 @@ All API endpoints are rooted at `/api/v1`.
 - `GET /billing/usage/{metric}/limit`
 - `POST /billing/stripe/webhook`
 - `GET /integrations/vekml/agents/{agent_id}/snapshot`
+
+The `/admin`, `/agents` and `/billing` routers were historically also mounted without their
+prefix (for example `GET /api/v1/{agent_id}` and `GET /api/v1/usage`). Those legacy paths are
+still served for existing callers but are not in the OpenAPI schema; new integrations should
+use the prefixed paths above.
 
 ## Deploy on Vercel
 
