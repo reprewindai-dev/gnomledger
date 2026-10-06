@@ -96,7 +96,7 @@ class GenomeService:
             # current genome for existing readers.
             certificate.genome_hash = new_hash
             result["payload"] = new_payload
-            return {
+            extra: dict[str, Any] = {
                 "previous_version": latest_version.version,
                 "new_version": new_version.version,
                 "previous_genome_hash": latest_version.genome_hash,
@@ -104,6 +104,14 @@ class GenomeService:
                 "genome_hash": new_hash,  # kept for readers of the original event shape
                 "changed_fields": changed_fields,
             }
+            if "run_mode" in changed_fields:
+                # Switching run mode (e.g. to autonomous) is a named decision by this caller.
+                extra["run_mode_authorization"] = {
+                    "mode": new_payload.get("run_mode"),
+                    "authorized_by": changed_by,
+                    "authorized_at": new_version.created_at.isoformat(),
+                }
+            return extra
 
         try:
             self.ledger_service.log_event(

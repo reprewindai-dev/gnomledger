@@ -21,7 +21,9 @@ from ..schemas import (
 )
 from ..utils import canonical_timestamp, short_id, stable_hash, utc_now
 from .analytics_service import AnalyticsService
+from .agent_handle import allocate_handle
 from .billing_service import BillingService
+from .principal import principal_label
 from .signing_service import CANONICALIZATION, ISSUER, get_signer
 
 _settings = get_settings()
@@ -55,9 +57,14 @@ def build_certificate_document(
     parent_agent_ids: list[str],
     issued_at: datetime,
     key_id: str,
+    agent_handle: str | None = None,
+    registered_by: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The signed birth certificate. Every value is JSON-native so it round-trips through
-    the database unchanged and re-serializes to the exact signed bytes."""
+    the database unchanged and re-serializes to the exact signed bytes.
+
+    The accountable party is the operator (registered_by, accountable_owner), never the
+    agent: the agent is a generic, disposable executor named by its handle."""
     owner = genome.accountable_owner.model_dump() if genome.accountable_owner else None
     oversight = genome.oversight.model_dump() if genome.oversight else None
     return {
@@ -68,6 +75,7 @@ def build_certificate_document(
         "canonicalization": CANONICALIZATION,
         "certificate_id": certificate_id,
         "agent_id": agent.agent_id,
+        "agent_handle": agent_handle,
         "name": agent.name,
         "creator": agent.creator,
         "jurisdiction": agent.jurisdiction,
@@ -90,10 +98,22 @@ def build_certificate_document(
             "statement": MODEL_STATEMENT,
         },
         "accountability": {
+            # The authenticated operator that registered the agent (from the API key).
+            "registered_by": registered_by,
             "accountable_owner": owner,
             "incident_contact": genome.incident_contact,
             "deployer": genome.deployer,
             "provider": genome.provider,
+        },
+        "run_mode": {
+            "mode": genome.run_mode,
+            "authorized_by": registered_by if genome.run_mode else None,
+            "authorized_at": issued_at.isoformat() if genome.run_mode else None,
+        },
+        "context": {
+            "industry": genome.industry,
+            "intended_use": genome.intended_use,
+            "jurisdiction": agent.jurisdiction,
         },
         "bounded_use": {
             "intended_use": genome.intended_use,
@@ -237,22 +257,29 @@ class CertificateService:
         self,
         payload: AgentCreateRequest,
         account_id: int,
+        registered_by: dict[str, Any] | None = None,
     ) -> AgentResponse:
         account = self._get_account(account_id)
-        parent_agents = self._assert_parent_agents_exist(account_id, payload.parent_agent_ids)
+        self._assert_parent_agents_exist(account_id, payload.parent_agent_ids)
 
         limit = self.billing_service.plan_limit(account, "certificate_issuance")
         self.billing_service.ensure_or_raise(account.id, "certificate_issuance", limit)
 
         agent_identifier = short_id("agent")
         certificate_identifier = short_id("cert")
+        # First write of the registration: a lost race for the sequence number rolls back
+        # and retries before anything else has been written.
+        handle = allocate_handle(self.db, account, agent_identifier).handle
+        parent_agents = self._assert_parent_agents_exist(account_id, payload.parent_agent_ids)
         now = utc_now()
+        agent_name = payload.agent_name or handle
+        creator = payload.creator or principal_label(registered_by)
 
         agent = models.Agent(
             account_id=account.id,
             agent_id=agent_identifier,
-            name=payload.agent_name,
-            creator=payload.creator,
+            name=agent_name,
+            creator=creator,
             jurisdiction=payload.jurisdiction,
             declared_purpose=payload.genome.intended_use,
         )
@@ -279,6 +306,8 @@ class CertificateService:
             parent_agent_ids=payload.parent_agent_ids,
             issued_at=now,
             key_id=get_signer().key_id,
+            agent_handle=handle,
+            registered_by=registered_by,
         )
 
         certificate = models.BirthCertificate(
@@ -304,12 +333,15 @@ class CertificateService:
             agent_id=agent.id,
             event_id=short_id("evt"),
             event_type="birth_registration",
-            actor=payload.creator,
-            summary=f"Registered agent '{payload.agent_name}'",
+            actor=creator,
+            summary=f"Registered agent '{agent_name}'"[:255],
             details={
                 "certificate_id": certificate_identifier,
                 "jurisdiction": payload.jurisdiction,
                 "parent_agent_ids": payload.parent_agent_ids,
+                "agent_handle": handle,
+                "registered_by": registered_by,
+                "run_mode_authorization": certificate_payload["run_mode"],
             },
             prev_event_hash=None,
             event_hash="",
@@ -380,4 +412,5 @@ class CertificateService:
             parent_agent_ids=payload.parent_agent_ids,
             created_at=agent.created_at,
             certificate=certificate_view(self.db, certificate),
+            agent_handle=handle,
         )

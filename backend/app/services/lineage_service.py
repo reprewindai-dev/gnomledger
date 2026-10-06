@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import models
 from ..schemas import AgentResponse, GenomePayload, LedgerEventCreate, LineageTreeNode
+from .agent_handle import allocate_handle
 from .billing_service import BillingService
 from .certificate_service import build_certificate_document, certificate_view, sign_certificate
 from .ledger_service import LedgerService
@@ -34,9 +37,15 @@ class LineageService:
         new_name: str,
         creator: str,
         jurisdiction: str,
+        registered_by: dict[str, Any] | None = None,
     ) -> AgentResponse:
-        source = self._get_agent_by_public_id(account_id, source_agent_id)
+        self._get_agent_by_public_id(account_id, source_agent_id)  # 404 before any write
+        new_agent_id = short_id("agent")
+        new_certificate_id = short_id("cert")
+        account = self.db.get(models.Account, account_id)
+        handle = allocate_handle(self.db, account, new_agent_id).handle
 
+        source = self._get_agent_by_public_id(account_id, source_agent_id)
         latest_genome = (
             self.db.execute(
                 select(models.GenomeVersion)
@@ -45,9 +54,6 @@ class LineageService:
                 .limit(1)
             )
         ).scalar_one()
-
-        new_agent_id = short_id("agent")
-        new_certificate_id = short_id("cert")
 
         new_agent = models.Agent(
             account_id=source.account_id,
@@ -96,6 +102,8 @@ class LineageService:
                 parent_agent_ids=[source.agent_id],
                 issued_at=issued_at,
                 key_id=get_signer().key_id,
+                agent_handle=handle,
+                registered_by=registered_by,
             ),
         )
 
@@ -128,6 +136,8 @@ class LineageService:
                     "jurisdiction": jurisdiction,
                     "parent_agent_ids": [source.agent_id],
                     "forked_from_genome_hash": latest_genome.genome_hash,
+                    "agent_handle": handle,
+                    "registered_by": registered_by,
                 },
             ),
             account_id=account_id,
@@ -152,6 +162,7 @@ class LineageService:
             parent_agent_ids=[source.agent_id],
             created_at=new_agent.created_at,
             certificate=certificate_view(self.db, certificate),
+            agent_handle=handle,
         )
 
     def _build_tree(self, agent: models.Agent, visited: set[int] | None = None) -> LineageTreeNode:

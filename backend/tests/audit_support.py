@@ -54,6 +54,8 @@ FULL_GENOME = {
         "oversight_contact": "claims-oversight@example.com",
         "escalation_path": "on-call claims lead, then CRO",
     },
+    "run_mode": "human_in_the_loop",
+    "industry": "insurance",
     "capability_refs": ["veklom.governed-counter@v1"],
     "system_prompt_sha256": PROMPT_SHA256,
     "code_commit": "2e5b004",

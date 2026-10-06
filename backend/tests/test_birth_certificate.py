@@ -35,6 +35,7 @@ TOP_LEVEL_GAPS = [
     "regulatory_risk_class",
     "risk_rationale",
     "oversight",
+    "run_mode",
     "capability_refs",
 ]
 

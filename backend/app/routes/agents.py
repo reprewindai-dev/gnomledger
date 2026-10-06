@@ -20,6 +20,7 @@ from ..schemas import (
 from ..services.certificate_service import CertificateService, certificate_view
 from ..services.decommission_service import AlreadyDecommissioned, DecommissionService
 from ..services.genome_service import GenomeConflict, GenomeService
+from ..services.agent_handle import handle_for
 from ..services.principal import describe_principal
 from .. import models
 
@@ -34,7 +35,9 @@ def create_agent(
 ) -> AgentResponse:
     service = CertificateService(db)
     try:
-        return service.register_agent(payload, account_id=ctx.account_id)
+        return service.register_agent(
+            payload, account_id=ctx.account_id, registered_by=describe_principal(db, ctx)
+        )
     except ValueError as exc:
         status_code = status.HTTP_402_PAYMENT_REQUIRED if "quota" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
@@ -95,6 +98,7 @@ def list_agents(
                 parent_agent_ids=cert.parent_agent_ids,
                 created_at=row.created_at,
                 certificate_uri=cert.document_uri,
+                agent_handle=handle_for(db, row.agent_id),
                 version_count=len(row.genome_versions),
                 latest_genome_hash=latest.genome_hash,
             )
@@ -159,6 +163,7 @@ def get_agent(
         certificate_uri=cert.document_uri,
         version_count=len(agent.genome_versions),
         latest_genome_hash=latest.genome_hash,
+        agent_handle=handle_for(db, agent.agent_id),
     )
 
 
@@ -293,6 +298,7 @@ def rebuild_agent_trust(
         certificate_uri=cert.document_uri,
         version_count=len(agent.genome_versions),
         latest_genome_hash=latest.genome_hash,
+        agent_handle=handle_for(db, agent.agent_id),
     )
 
 

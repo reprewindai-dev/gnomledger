@@ -160,6 +160,24 @@ class BirthCertificate(Base):
     )
 
 
+class AgentHandle(Base):
+    """Server-generated audit handle of an agent: <OperatorInitials>-<OperatorShortId>-<seq>,
+    seq counting the operator's registrations. A separate table so existing databases gain it
+    through create_all; (account_id, seq) is unique, so concurrent registrations cannot share
+    a number."""
+
+    __tablename__ = "agent_handles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    handle: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    agent_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("account_id", "seq", name="uq_agent_handle_seq"),)
+
+
 class CertificateSignature(Base):
     """Ed25519 signature over a birth certificate's certificate_payload.
 
@@ -338,8 +356,8 @@ class RetentionViolation(RuntimeError):
     """An ORM delete or rewrite of a record the ledger keeps for audit."""
 
 
-_RETAINED = (Agent, GenomeVersion, BirthCertificate, CertificateSignature, LedgerEvent)
-_APPEND_ONLY = (GenomeVersion, CertificateSignature, LedgerEvent)
+_RETAINED = (Agent, AgentHandle, GenomeVersion, BirthCertificate, CertificateSignature, LedgerEvent)
+_APPEND_ONLY = (AgentHandle, GenomeVersion, CertificateSignature, LedgerEvent)
 
 
 def _refuse_record_deletion(mapper, connection, target) -> None:

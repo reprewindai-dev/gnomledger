@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..dependencies import get_db, require_role
 from ..schemas import AgentResponse, LineageForkRequest, LineageTreeNode
 from ..services.lineage_service import LineageService
+from ..services.principal import describe_principal
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ def fork_agent(
             new_name=payload.new_name,
             creator=payload.creator,
             jurisdiction=payload.jurisdiction,
+            registered_by=describe_principal(db, ctx),
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

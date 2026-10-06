@@ -44,7 +44,12 @@ def bootstrap(
     account = models.Account(name=payload.account_name, tier=payload.account_tier)
     db.add(account)
     db.flush()
-    admin_user = models.User(account_id=account.id, email=payload.admin_name, role="owner")
+    admin_user = models.User(
+        account_id=account.id,
+        email=payload.admin_name,
+        full_name=payload.admin_full_name,
+        role="owner",
+    )
     db.add(admin_user)
     db.flush()
 

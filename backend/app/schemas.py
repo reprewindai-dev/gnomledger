@@ -131,6 +131,10 @@ class GenomePayload(BaseModel):
 
     # -- human oversight ---------------------------------------------------------------------
     oversight: OversightPlan | None = None
+    # Autonomy is a recorded decision: the certificate and ledger record who authorized this
+    # run mode (the authenticated operator) and when. Unset is reported as a gap.
+    run_mode: Literal["human_in_the_loop", "autonomous"] | None = None
+    industry: str | None = Field(default=None, min_length=1, max_length=128)  # sector
 
     # -- enforceable authority ---------------------------------------------------------------
     capability_refs: list[str] = Field(default_factory=list, max_length=100)
@@ -308,6 +312,7 @@ ACCOUNTABILITY_FIELDS = (
     "oversight.stop_mechanism",
     "oversight.oversight_contact",
     "oversight.escalation_path",
+    "run_mode",
     "capability_refs",
 )
 INTEGRITY_FIELDS = ("system_prompt_sha256", "code_commit", "image_digest", "tool_versions")
@@ -336,8 +341,11 @@ def missing_integrity_fields(genome: GenomePayload) -> list[str]:
 
 
 class AgentCreateRequest(BaseModel):
-    agent_name: str = Field(min_length=1, max_length=255)
-    creator: str = Field(min_length=1, max_length=255)
+    # Optional: agents are generic and disposable. When omitted the agent is named by its
+    # server-generated handle (<OperatorInitials>-<OperatorShortId>-<runSeq>).
+    agent_name: str | None = Field(default=None, min_length=1, max_length=255)
+    # Optional: defaults to the authenticated operator (registered_by is always recorded).
+    creator: str | None = Field(default=None, min_length=1, max_length=255)
     jurisdiction: str = Field(min_length=1, max_length=64)
     genome: GenomePayload
     parent_agent_ids: list[str] = Field(default_factory=list)
@@ -428,6 +436,9 @@ class AgentResponse(BaseModel):
     # Set on registration and fork responses; list/detail responses leave it null (use
     # GET /agents/{agent_id}/certificate).
     certificate: CertificateDownloadResponse | None = None
+    # Server-generated audit handle <OperatorInitials>-<OperatorShortId>-<runSeq>; null for
+    # agents registered before handles existed.
+    agent_handle: str | None = None
 
 
 class AgentDetailResponse(AgentResponse):
@@ -638,6 +649,8 @@ class BootstrapRequest(BaseModel):
     account_name: str = Field(min_length=1, max_length=255)
     account_tier: Literal["launch", "scale", "enterprise"] = "launch"
     admin_name: str = Field(default="genome-ledger-admin", max_length=255)
+    # The operator's real name; agent handles take their initials from it.
+    admin_full_name: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class ErrorResponse(BaseModel):
