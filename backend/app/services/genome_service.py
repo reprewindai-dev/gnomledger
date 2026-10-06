@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..schemas import GenomePayload, GenomeUpdateRequest, LedgerEventCreate
+from ..schemas import LEGACY_GENOME_FIELDS, GenomePayload, GenomeUpdateRequest, LedgerEventCreate
 from ..services.ledger_service import LedgerService
 from ..utils import stable_hash, utc_now
 
@@ -41,8 +41,14 @@ class GenomeService:
             )
         ).scalar_one()
 
-        new_payload = latest_version.payload.copy()
-        new_payload.update(payload.changes.model_dump())
+        # The original genome fields are replaced as before (changes is a full genome); the
+        # accountability fields are merged, so a client that predates them cannot erase them
+        # by omission.
+        current = GenomePayload(**latest_version.payload)
+        replaced = payload.changes.model_dump(
+            include=set(LEGACY_GENOME_FIELDS) | payload.changes.model_fields_set
+        )
+        new_payload = GenomePayload(**{**current.model_dump(), **replaced}).canonical()
         new_hash = stable_hash(new_payload)
         timestamp = utc_now()
         if new_hash == latest_version.genome_hash:

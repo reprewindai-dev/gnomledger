@@ -68,11 +68,12 @@ class CertificateService:
         self.db.add(agent)
         self.db.flush()
 
-        genome_hash = stable_hash(payload.genome.model_dump())
+        genome_canonical = payload.genome.canonical()
+        genome_hash = stable_hash(genome_canonical)
         genome_version = models.GenomeVersion(
             agent_id=agent.id,
             version=1,
-            payload=payload.genome.model_dump(),
+            payload=genome_canonical,
             genome_hash=genome_hash,
             note="Initial registration",
             created_at=now,
