@@ -189,7 +189,7 @@ def update_genome(
 ) -> GenomePayload:
     service = GenomeService(db)
     try:
-        return service.update_genome(agent_id, payload)
+        return service.update_genome(agent_id, payload, account_id=ctx.account_id)
     except ValueError as exc:
         message = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND
@@ -274,11 +274,13 @@ def validate_execution(
     db: Session = Depends(get_db),
     ctx=Depends(require_role("viewer", "operator", "admin", "owner")),
 ) -> ExecutionValidateResponse:
+    # Scoped to the caller's account: a foreign agent validates exactly like an unknown one,
+    # so this route can neither bind its workspace_id nor reveal that it exists.
     agent = db.execute(
         select(models.Agent)
-        .where(models.Agent.agent_id == payload.agent_id)
+        .where(models.Agent.account_id == ctx.account_id, models.Agent.agent_id == payload.agent_id)
     ).scalar_one_or_none()
-    
+
     if not agent:
         return ExecutionValidateResponse(
             allowed=False,

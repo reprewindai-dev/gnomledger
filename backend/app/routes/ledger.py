@@ -32,11 +32,11 @@ ViewerContext = Annotated[
 def create_ledger_event(
     payload: LedgerEventCreate,
     db: DbSession,
-    _ctx: OperatorContext,
+    ctx: OperatorContext,
 ) -> LedgerEventResponse:
     service = LedgerService(db)
     try:
-        return service.log_event(payload)
+        return service.log_event(payload, account_id=ctx.account_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -45,13 +45,15 @@ def create_ledger_event(
 def get_agent_history(
     agent_id: str,
     db: DbSession,
-    _ctx: ViewerContext,
+    ctx: ViewerContext,
     limit: int = Query(default=200, ge=1, le=500),
     cursor: int | None = Query(default=None, ge=1),
 ) -> list[LedgerEventResponse]:
     service = LedgerService(db)
     try:
-        return service.get_agent_history(agent_id=agent_id, limit=limit, cursor=cursor)
+        return service.get_agent_history(
+            agent_id=agent_id, limit=limit, cursor=cursor, account_id=ctx.account_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -73,11 +75,11 @@ def get_ledger_event(
 def verify_agent_chain(
     agent_id: str,
     db: DbSession,
-    _ctx: ViewerContext,
+    ctx: ViewerContext,
 ) -> LedgerChainVerifyRequest:
     service = LedgerService(db)
     try:
-        _, payload = service.verify_chain(agent_id)
+        _, payload = service.verify_chain(agent_id, account_id=ctx.account_id)
         return LedgerChainVerifyRequest(**payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -8,8 +8,12 @@ from ..models import Agent, IncidentRecord
 from ..utils import utc_now
 
 
-def _get_agent(db: Session, agent_id: str) -> Agent:
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+def _get_agent(db: Session, agent_id: str, account_id: int | None = None) -> Agent:
+    # account_id scopes the lookup to the caller's tenant; a foreign agent reads as not found.
+    q = db.query(Agent).filter(Agent.agent_id == agent_id)
+    if account_id is not None:
+        q = q.filter(Agent.account_id == account_id)
+    agent = q.first()
     if not agent:
         raise ValueError(f"Agent {agent_id!r} not found")
     return agent
@@ -23,8 +27,9 @@ def create_incident(
     title: str,
     description: str,
     reporter: str,
+    account_id: int | None = None,
 ) -> IncidentRecord:
-    agent = _get_agent(db, agent_id)
+    agent = _get_agent(db, agent_id, account_id)
     record = IncidentRecord(
         agent_id=agent.id,
         incident_id=str(uuid.uuid4()),
@@ -49,8 +54,9 @@ def list_incidents(
     severity: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    account_id: int | None = None,
 ) -> list[IncidentRecord]:
-    agent = _get_agent(db, agent_id)
+    agent = _get_agent(db, agent_id, account_id)
     q = db.query(IncidentRecord).filter(IncidentRecord.agent_id == agent.id)
     if status:
         q = q.filter(IncidentRecord.status == status)
@@ -59,8 +65,10 @@ def list_incidents(
     return q.order_by(IncidentRecord.created_at.desc()).offset(offset).limit(limit).all()
 
 
-def get_incident(db: Session, agent_id: str, incident_id: str) -> IncidentRecord:
-    agent = _get_agent(db, agent_id)
+def get_incident(
+    db: Session, agent_id: str, incident_id: str, *, account_id: int | None = None
+) -> IncidentRecord:
+    agent = _get_agent(db, agent_id, account_id)
     record = (
         db.query(IncidentRecord)
         .filter(
@@ -81,8 +89,9 @@ def update_incident(
     *,
     status: str | None = None,
     resolution_notes: str | None = None,
+    account_id: int | None = None,
 ) -> IncidentRecord:
-    record = get_incident(db, agent_id, incident_id)
+    record = get_incident(db, agent_id, incident_id, account_id=account_id)
     if status:
         record.status = status
         if status in ("resolved", "closed") and record.resolved_at is None:
@@ -94,7 +103,9 @@ def update_incident(
     return record
 
 
-def delete_incident(db: Session, agent_id: str, incident_id: str) -> None:
-    record = get_incident(db, agent_id, incident_id)
+def delete_incident(
+    db: Session, agent_id: str, incident_id: str, *, account_id: int | None = None
+) -> None:
+    record = get_incident(db, agent_id, incident_id, account_id=account_id)
     db.delete(record)
     db.commit()

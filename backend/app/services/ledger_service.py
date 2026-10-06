@@ -29,10 +29,23 @@ class LedgerService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def log_event(self, payload: LedgerEventCreate) -> LedgerEventResponse:
+    def _resolve_agent(self, agent_id: str, account_id: int | None) -> models.Agent:
+        # account_id scopes the lookup to the caller's tenant. A foreign agent is reported
+        # exactly like an unknown one so a route cannot leak that it exists.
+        stmt = select(models.Agent).where(models.Agent.agent_id == agent_id)
+        if account_id is not None:
+            stmt = stmt.where(models.Agent.account_id == account_id)
+        agent = self.db.execute(stmt).scalar_one_or_none()
+        if not agent:
+            raise ValueError("Unknown agent_id")
+        return agent
+
+    def log_event(
+        self, payload: LedgerEventCreate, *, account_id: int | None = None
+    ) -> LedgerEventResponse:
         connection = self.db.connection()
         if connection.dialect.name != "sqlite":
-            return self._append_event(payload)
+            return self._append_event(payload, account_id)
         # SQLite has no row locks and ignores FOR UPDATE, and the driver opens a transaction
         # only at the first write, after the chain head has been read. So the append takes
         # the database write lock before that read (this also covers other processes). The
@@ -43,22 +56,24 @@ class LedgerService:
             try:
                 if not connection.connection.dbapi_connection.in_transaction:
                     connection.exec_driver_sql("BEGIN IMMEDIATE")
-                return self._append_event(payload)
+                return self._append_event(payload, account_id)
             finally:
                 # Never leave the process lock while still holding the database lock.
                 if self.db.in_transaction():
                     self.db.rollback()
 
-    def _append_event(self, payload: LedgerEventCreate) -> LedgerEventResponse:
+    def _append_event(
+        self, payload: LedgerEventCreate, account_id: int | None
+    ) -> LedgerEventResponse:
         # Appends to one agent's chain are serialized on the agent row. Without the lock two
         # concurrent appends read the same chain head and both link to it, forking the chain
         # (observed: lineage-reformation run lre-20261005T001846Z, verify "blocked").
         # populate_existing: the locked read must return the committed row, not a cached one.
+        stmt = select(models.Agent).where(models.Agent.agent_id == payload.agent_id)
+        if account_id is not None:
+            stmt = stmt.where(models.Agent.account_id == account_id)
         agent = self.db.execute(
-            select(models.Agent)
-            .where(models.Agent.agent_id == payload.agent_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+            stmt.with_for_update().execution_options(populate_existing=True)
         ).scalar_one_or_none()
         if not agent:
             raise ValueError("Unknown agent_id")
@@ -204,12 +219,9 @@ class LedgerService:
         agent_id: str,
         limit: int = 100,
         cursor: int | None = None,
+        account_id: int | None = None,
     ) -> list[LedgerEventResponse]:
-        agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
-        ).scalar_one_or_none()
-        if not agent:
-            raise ValueError("Unknown agent_id")
+        agent = self._resolve_agent(agent_id, account_id)
 
         stmt = (
             select(models.LedgerEvent)
@@ -234,12 +246,10 @@ class LedgerService:
             for e in events
         ]
 
-    def verify_chain(self, agent_id: str) -> tuple[bool, dict[str, object]]:
-        agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
-        ).scalar_one_or_none()
-        if not agent:
-            raise ValueError("Unknown agent_id")
+    def verify_chain(
+        self, agent_id: str, *, account_id: int | None = None
+    ) -> tuple[bool, dict[str, object]]:
+        agent = self._resolve_agent(agent_id, account_id)
 
         events = list(
             self.db.execute(

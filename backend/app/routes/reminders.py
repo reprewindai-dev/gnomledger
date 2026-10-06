@@ -3,15 +3,20 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..dependencies import auth_context, get_db
+from ..dependencies import get_db, require_role
 from ..schemas import PGLRequestContext
 from ..services import reminder_service
 
 router = APIRouter(prefix="/agents/{agent_id}/reminders", tags=["reminders"])
+
+# Reads need a viewer key; writes need an operator key. Every call is scoped to the
+# caller's account, and an agent outside it is reported as 404 like an unknown one.
+_read_ctx = require_role("viewer", "operator", "admin", "owner")
+_write_ctx = require_role("operator", "admin", "owner")
 
 
 # ---------------------------------------------------------------------------
@@ -61,16 +66,20 @@ def create_reminder(
     agent_id: str,
     body: ReminderCreate,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(_write_ctx),
 ):
-    reminder = reminder_service.create_reminder(
-        db,
-        agent_id,
-        title=body.title,
-        message=body.message,
-        frequency=body.frequency,
-        next_trigger_at=body.next_trigger_at,
-    )
+    try:
+        reminder = reminder_service.create_reminder(
+            db,
+            agent_id,
+            title=body.title,
+            message=body.message,
+            frequency=body.frequency,
+            next_trigger_at=body.next_trigger_at,
+            account_id=ctx.account_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _serialize(reminder, agent_id)
 
 
@@ -85,11 +94,19 @@ def list_reminders(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(_read_ctx),
 ):
-    reminders = reminder_service.list_reminders(
-        db, agent_id, active_only=active_only, limit=limit, offset=offset
-    )
+    try:
+        reminders = reminder_service.list_reminders(
+            db,
+            agent_id,
+            active_only=active_only,
+            limit=limit,
+            offset=offset,
+            account_id=ctx.account_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return [_serialize(r, agent_id) for r in reminders]
 
 
@@ -102,9 +119,14 @@ def get_reminder(
     agent_id: str,
     reminder_id: str,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(_read_ctx),
 ):
-    reminder = reminder_service.get_reminder(db, agent_id, reminder_id)
+    try:
+        reminder = reminder_service.get_reminder(
+            db, agent_id, reminder_id, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _serialize(reminder, agent_id)
 
 
@@ -118,18 +140,22 @@ def update_reminder(
     reminder_id: str,
     body: ReminderUpdate,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(_write_ctx),
 ):
-    reminder = reminder_service.update_reminder(
-        db,
-        agent_id,
-        reminder_id,
-        title=body.title,
-        message=body.message,
-        frequency=body.frequency,
-        next_trigger_at=body.next_trigger_at,
-        is_active=body.is_active,
-    )
+    try:
+        reminder = reminder_service.update_reminder(
+            db,
+            agent_id,
+            reminder_id,
+            title=body.title,
+            message=body.message,
+            frequency=body.frequency,
+            next_trigger_at=body.next_trigger_at,
+            is_active=body.is_active,
+            account_id=ctx.account_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _serialize(reminder, agent_id)
 
 
@@ -142,9 +168,14 @@ def trigger_reminder(
     agent_id: str,
     reminder_id: str,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(_write_ctx),
 ):
-    reminder = reminder_service.trigger_reminder(db, agent_id, reminder_id)
+    try:
+        reminder = reminder_service.trigger_reminder(
+            db, agent_id, reminder_id, account_id=ctx.account_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _serialize(reminder, agent_id)
 
 
@@ -157,9 +188,12 @@ def delete_reminder(
     agent_id: str,
     reminder_id: str,
     db: Session = Depends(get_db),
-    ctx: PGLRequestContext = Depends(auth_context),
+    ctx: PGLRequestContext = Depends(_write_ctx),
 ):
-    reminder_service.delete_reminder(db, agent_id, reminder_id)
+    try:
+        reminder_service.delete_reminder(db, agent_id, reminder_id, account_id=ctx.account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------

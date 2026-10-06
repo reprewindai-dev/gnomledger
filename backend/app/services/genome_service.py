@@ -14,16 +14,24 @@ class GenomeService:
         self.db = db
         self.ledger_service = LedgerService(db)
 
-    def _get_agent(self, agent_id: str) -> models.Agent:
-        agent = self.db.execute(
-            select(models.Agent).where(models.Agent.agent_id == agent_id)
-        ).scalar_one_or_none()
+    def _get_agent(self, agent_id: str, account_id: int | None = None) -> models.Agent:
+        # account_id scopes the lookup to the caller's tenant; a foreign agent reads as unknown.
+        stmt = select(models.Agent).where(models.Agent.agent_id == agent_id)
+        if account_id is not None:
+            stmt = stmt.where(models.Agent.account_id == account_id)
+        agent = self.db.execute(stmt).scalar_one_or_none()
         if not agent:
             raise ValueError("Unknown agent_id")
         return agent
 
-    def update_genome(self, agent_id: str, payload: GenomeUpdateRequest) -> GenomePayload:
-        agent = self._get_agent(agent_id)
+    def update_genome(
+        self,
+        agent_id: str,
+        payload: GenomeUpdateRequest,
+        *,
+        account_id: int | None = None,
+    ) -> GenomePayload:
+        agent = self._get_agent(agent_id, account_id)
         latest_version = (
             self.db.execute(
                 select(models.GenomeVersion)

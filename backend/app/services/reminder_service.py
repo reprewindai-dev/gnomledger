@@ -9,8 +9,12 @@ from ..models import Agent, AuditReminder
 from ..utils import utc_now
 
 
-def _get_agent(db: Session, agent_id: str) -> Agent:
-    agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
+def _get_agent(db: Session, agent_id: str, account_id: int | None = None) -> Agent:
+    # account_id scopes the lookup to the caller's tenant; a foreign agent reads as not found.
+    q = db.query(Agent).filter(Agent.agent_id == agent_id)
+    if account_id is not None:
+        q = q.filter(Agent.account_id == account_id)
+    agent = q.first()
     if not agent:
         raise ValueError(f"Agent {agent_id!r} not found")
     return agent
@@ -24,8 +28,9 @@ def create_reminder(
     message: str,
     frequency: str,
     next_trigger_at: datetime,
+    account_id: int | None = None,
 ) -> AuditReminder:
-    agent = _get_agent(db, agent_id)
+    agent = _get_agent(db, agent_id, account_id)
     reminder = AuditReminder(
         agent_id=agent.id,
         reminder_id=str(uuid.uuid4()),
@@ -49,16 +54,19 @@ def list_reminders(
     active_only: bool = False,
     limit: int = 50,
     offset: int = 0,
+    account_id: int | None = None,
 ) -> list[AuditReminder]:
-    agent = _get_agent(db, agent_id)
+    agent = _get_agent(db, agent_id, account_id)
     q = db.query(AuditReminder).filter(AuditReminder.agent_id == agent.id)
     if active_only:
         q = q.filter(AuditReminder.is_active == True)  # noqa: E712
     return q.order_by(AuditReminder.next_trigger_at.asc()).offset(offset).limit(limit).all()
 
 
-def get_reminder(db: Session, agent_id: str, reminder_id: str) -> AuditReminder:
-    agent = _get_agent(db, agent_id)
+def get_reminder(
+    db: Session, agent_id: str, reminder_id: str, *, account_id: int | None = None
+) -> AuditReminder:
+    agent = _get_agent(db, agent_id, account_id)
     reminder = (
         db.query(AuditReminder)
         .filter(
@@ -82,8 +90,9 @@ def update_reminder(
     frequency: str | None = None,
     next_trigger_at: datetime | None = None,
     is_active: bool | None = None,
+    account_id: int | None = None,
 ) -> AuditReminder:
-    reminder = get_reminder(db, agent_id, reminder_id)
+    reminder = get_reminder(db, agent_id, reminder_id, account_id=account_id)
     if title is not None:
         reminder.title = title
     if message is not None:
@@ -99,17 +108,21 @@ def update_reminder(
     return reminder
 
 
-def delete_reminder(db: Session, agent_id: str, reminder_id: str) -> None:
-    reminder = get_reminder(db, agent_id, reminder_id)
+def delete_reminder(
+    db: Session, agent_id: str, reminder_id: str, *, account_id: int | None = None
+) -> None:
+    reminder = get_reminder(db, agent_id, reminder_id, account_id=account_id)
     db.delete(reminder)
     db.commit()
 
 
-def trigger_reminder(db: Session, agent_id: str, reminder_id: str) -> AuditReminder:
+def trigger_reminder(
+    db: Session, agent_id: str, reminder_id: str, *, account_id: int | None = None
+) -> AuditReminder:
     """Mark reminder as triggered, advance next_trigger_at based on frequency."""
     from datetime import timedelta
 
-    reminder = get_reminder(db, agent_id, reminder_id)
+    reminder = get_reminder(db, agent_id, reminder_id, account_id=account_id)
     now = utc_now()
     reminder.last_triggered_at = now
 
