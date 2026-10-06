@@ -34,6 +34,11 @@ AUTHORITY_STATEMENT = (
     "are not enforced. tools are checked only when a runtime calls "
     "POST /api/v1/agents/execution/validate."
 )
+MODEL_STATEMENT = (
+    "This certificate identifies a kind of agent, registered once. Each task is a separate "
+    "ephemeral execution that cites this genome; the model a task actually used is recorded "
+    "on that task's execution evidence as model_used and must be one of declared_models."
+)
 RETENTION_STATEMENT = (
     "This ledger does not delete ledger events, genome versions or certificates, including "
     "after decommissioning. log_retention_days is the declared minimum retention."
@@ -73,11 +78,16 @@ def build_certificate_document(
         "genome_version": genome_version,
         "genome_hash_method": "sha256 of the pgl-c14n bytes of the canonical genome",
         "model": {
+            "declared_models": genome.effective_models(),
+            "declared_models_source": (
+                "declared_models" if genome.declared_models else "single_model_fields"
+            ),
             "model_family": genome.model_family,
             "model_version": genome.model_version,
             "architecture": genome.architecture,
             "model_provider": genome.model_provider,
             "model_identifier": genome.model_identifier,
+            "statement": MODEL_STATEMENT,
         },
         "accountability": {
             "accountable_owner": owner,

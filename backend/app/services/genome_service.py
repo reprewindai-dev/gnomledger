@@ -7,7 +7,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..schemas import LEGACY_GENOME_FIELDS, GenomePayload, GenomeUpdateRequest, LedgerEventCreate
+from ..schemas import (
+    LEGACY_GENOME_FIELDS,
+    SINGLE_MODEL_FIELDS,
+    GenomePayload,
+    GenomeUpdateRequest,
+    LedgerEventCreate,
+)
 from ..services.ledger_service import LedgerService
 from ..utils import stable_hash, utc_now
 from .principal import principal_label
@@ -60,7 +66,8 @@ class GenomeService:
             # erase them by omission.
             current = GenomePayload(**latest_version.payload)
             replaced = payload.changes.model_dump(
-                include=set(LEGACY_GENOME_FIELDS) | payload.changes.model_fields_set
+                include=(set(LEGACY_GENOME_FIELDS) - set(SINGLE_MODEL_FIELDS))
+                | payload.changes.model_fields_set
             )
             new_payload = GenomePayload(**{**current.model_dump(), **replaced}).canonical()
             new_hash = stable_hash(new_payload)

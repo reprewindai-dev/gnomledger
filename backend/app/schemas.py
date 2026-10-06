@@ -61,6 +61,21 @@ class OversightPlan(BaseModel):
     escalation_path: str | None = Field(default=None, max_length=1024)
 
 
+class DeclaredModel(BaseModel):
+    """One model this kind of agent may call. A task's execution evidence records the model
+    it actually used (model_used), which must be one of the genome's declared models."""
+
+    provider: str = Field(min_length=1, max_length=128)  # e.g. Anthropic, OpenAI, self-hosted
+    identifier: str = Field(min_length=1, max_length=512)  # exact model id / digest / endpoint
+    role: str | None = Field(default=None, max_length=128)  # e.g. planner, executor, embedding
+    family: str | None = Field(default=None, max_length=128)
+    version: str | None = Field(default=None, max_length=64)
+
+
+# The single-model fields: still accepted, and read as one declared model when
+# declared_models is not given.
+SINGLE_MODEL_FIELDS = ("model_family", "model_version", "architecture")
+
 # Fields the genome had before the accountability fields were added. A genome hash is the
 # SHA-256 of the canonical genome (see GenomePayload.canonical), and the canonical form omits
 # every newer field left at its default, so genomes registered in the old shape keep the
@@ -79,9 +94,17 @@ LEGACY_GENOME_FIELDS = (
 
 
 class GenomePayload(BaseModel):
-    model_family: str = Field(min_length=1, max_length=128)
-    model_version: str = Field(min_length=1, max_length=64)
-    architecture: str = Field(min_length=1, max_length=128)
+    """The register-once identity of a kind of agent. Tasks are ephemeral executions that
+    cite this genome; it is not re-registered per task.
+
+    Models: either the single-model fields (model_family + model_version, optionally
+    architecture / model_provider / model_identifier), or declared_models for agents that
+    orchestrate several models. At least one must be given."""
+
+    model_family: str | None = Field(default=None, min_length=1, max_length=128)
+    model_version: str | None = Field(default=None, min_length=1, max_length=64)
+    architecture: str | None = Field(default=None, min_length=1, max_length=128)
+    declared_models: list[DeclaredModel] = Field(default_factory=list, max_length=32)
     tools: list[str] = Field(default_factory=list)
     # Declarative only: CAPPO enforces capability_refs, not these strings.
     permissions: list[str] = Field(default_factory=list)
@@ -199,12 +222,62 @@ class GenomePayload(BaseModel):
                 raise ValueError("tool_versions names and versions must be 1-128 characters")
         return value
 
+    @model_validator(mode="after")
+    def _declares_a_model(self) -> "GenomePayload":
+        if not self.declared_models and not self.model_family:
+            raise ValueError(
+                "declare the agent's models: declared_models, or model_family + model_version"
+            )
+        if self.model_family and not self.model_version:
+            raise ValueError("model_version is required with model_family")
+        if self.declared_models and (self.model_provider or self.model_identifier):
+            # The single-model fields may accompany the list, but must not contradict it.
+            if not any(
+                (self.model_provider in (None, m.provider))
+                and (self.model_identifier in (None, m.identifier))
+                for m in self.declared_models
+            ):
+                raise ValueError(
+                    "model_provider / model_identifier must match an entry of declared_models"
+                )
+        return self
+
+    def effective_models(self) -> list[dict[str, Any]]:
+        """The models this genome declares. Without declared_models, the single-model fields
+        are read as one declared model (provider / identifier may then be null)."""
+        if self.declared_models:
+            return [m.model_dump() for m in self.declared_models]
+        return [
+            {
+                "provider": self.model_provider,
+                "identifier": self.model_identifier,
+                "role": "primary",
+                "family": self.model_family,
+                "version": self.model_version,
+            }
+        ]
+
+    def declares_model(self, model_used: str) -> bool:
+        """Whether a task's model_used (an identifier, or "provider/identifier") is declared."""
+        for model in self.effective_models():
+            candidates = {model["identifier"]}
+            if model["provider"] and model["identifier"]:
+                candidates.add(f"{model['provider']}/{model['identifier']}")
+            if not model["identifier"] and model["family"]:
+                # Single-model genomes without an identifier: family[:version] is all we have.
+                candidates.update({model["family"], f"{model['family']}:{model['version']}"})
+            if model_used in candidates - {None}:
+                return True
+        return False
+
     def canonical(self) -> dict[str, Any]:
         """The stored and hashed form: newer fields left at their defaults are omitted."""
         dumped = self.model_dump()
         canonical: dict[str, Any] = {}
         for name, field in GenomePayload.model_fields.items():
             value = dumped[name]
+            if name in SINGLE_MODEL_FIELDS and value is None:
+                continue  # never None in genomes that predate declared_models
             if name not in LEGACY_GENOME_FIELDS:
                 if value == field.get_default(call_default_factory=True):
                     continue
@@ -224,8 +297,8 @@ ACCOUNTABILITY_FIELDS = (
     "incident_contact",
     "deployer",
     "provider",
-    "model_provider",
-    "model_identifier",
+    "declared_models[].provider",
+    "declared_models[].identifier",
     "out_of_scope_uses",
     "known_limitations",
     "data_categories",
@@ -241,6 +314,10 @@ INTEGRITY_FIELDS = ("system_prompt_sha256", "code_commit", "image_digest", "tool
 
 
 def _is_missing(genome: GenomePayload, path: str) -> bool:
+    if path.startswith("declared_models[]."):
+        # Missing when any declared model (or the single-model declaration) lacks it.
+        member = path.rsplit(".", 1)[1]
+        return any(not model[member] for model in genome.effective_models())
     head, _, member = path.partition(".")
     value = getattr(genome, head)
     if member:
@@ -290,6 +367,9 @@ class PreExecutionAuthorizationDetails(BaseModel):
     actor_id: str | None
     provenance: dict[str, Any]
     standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
+    # The model this task actually used (identifier, or "provider/identifier"); must be one of
+    # the genome's declared models. Recorded by the runtime (CAPPO) per task.
+    model_used: str | None = Field(default=None, max_length=640)
 
 
 class PostExecutionAttestationDetails(BaseModel):
@@ -303,6 +383,7 @@ class PostExecutionAttestationDetails(BaseModel):
     actor_id: str | None
     provenance: dict[str, Any]
     standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
+    model_used: str | None = Field(default=None, max_length=640)
 
 
 class SignatureBlock(BaseModel):
@@ -596,6 +677,8 @@ class ExecutionValidateRequest(BaseModel):
     workspace_id: str
     requested_tools: list[str]
     expected_genome_hash: str
+    # Optional: the model this task will use. If given it must be a declared model.
+    model_used: str | None = Field(default=None, max_length=640)
 
 
 class ExecutionValidateResponse(BaseModel):
@@ -606,3 +689,5 @@ class ExecutionValidateResponse(BaseModel):
     risk_tier: str
     trust_policy_version: str
     evidence_head: str | None
+    # null when the request carried no model_used.
+    model_used_declared: bool | None = None

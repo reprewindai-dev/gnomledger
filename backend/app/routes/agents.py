@@ -373,6 +373,25 @@ def validate_execution(
                 evidence_head=None,
             )
 
+    # The genome declares the models this kind of agent may use; a task may run on one of
+    # them only. The runtime records the model actually used on the task's evidence.
+    model_used_declared = None
+    if payload.model_used is not None:
+        model_used_declared = GenomePayload(**latest_version.payload).declares_model(
+            payload.model_used
+        )
+        if not model_used_declared:
+            return ExecutionValidateResponse(
+                allowed=False,
+                agent_certificate_id=agent.certificate.certificate_id if agent.certificate else None,
+                canonical_genome_hash=latest_version.genome_hash,
+                trust_score=0.0,
+                risk_tier="terminated",
+                trust_policy_version="v1",
+                evidence_head=None,
+                model_used_declared=False,
+            )
+
     snapshot = agent.trust_snapshot
     if snapshot:
         trust_score = snapshot.trust_score
@@ -396,6 +415,7 @@ def validate_execution(
             risk_tier=risk_tier,
             trust_policy_version=trust_policy_version,
             evidence_head=evidence_head,
+            model_used_declared=model_used_declared,
         )
 
     return ExecutionValidateResponse(
@@ -406,4 +426,5 @@ def validate_execution(
         risk_tier=risk_tier,
         trust_policy_version=trust_policy_version,
         evidence_head=evidence_head,
+        model_used_declared=model_used_declared,
     )
