@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models
+from ..dependencies import ROLE_RANK
 from ..schemas import ApiKeyCreateRequest
 from ..utils import hash_api_key, utc_now
 
@@ -20,10 +21,17 @@ class ApiKeyService:
         self,
         account_id: int,
         payload: ApiKeyCreateRequest,
+        *,
+        issuer_role: str | None = None,
     ) -> tuple[str, models.ApiKey]:
-        allowed_roles = {"viewer", "operator", "admin", "owner"}
-        if payload.role not in allowed_roles:
+        if payload.role not in ROLE_RANK:
             raise ValueError(f"Unsupported API key role: {payload.role}")
+        # A caller may never mint a key more privileged than its own (an admin minting an
+        # owner key was an escalation path). issuer_role=None is a trusted internal call.
+        if issuer_role is not None and ROLE_RANK[payload.role] > ROLE_RANK.get(issuer_role, 0):
+            raise PermissionError(
+                f"Cannot issue a {payload.role} key with a {issuer_role} key"
+            )
         if payload.account_id is not None:
             account_id = payload.account_id
         account = self.db.execute(

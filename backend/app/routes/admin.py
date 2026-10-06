@@ -7,11 +7,26 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..dependencies import get_db, require_role
 from .. import models
-from ..schemas import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyListItem, BootstrapRequest
+from ..schemas import (
+    ApiKeyCreateRequest,
+    ApiKeyCreateResponse,
+    ApiKeyListItem,
+    BootstrapRequest,
+    PGLRequestContext,
+)
 from ..services.key_service import ApiKeyService
 
 router = APIRouter()
 settings = get_settings()
+
+
+def _authorize_account(ctx: PGLRequestContext, account_id: int) -> None:
+    """Admins administer keys for their own account only; owners may administer any.
+
+    A foreign account answers 404 exactly like a nonexistent one so it is not enumerable.
+    """
+    if ctx.role != "owner" and ctx.account_id != account_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown account_id")
 
 
 @router.post("/bootstrap", response_model=ApiKeyCreateResponse)
@@ -60,14 +75,25 @@ def create_api_key(
     account_id: int,
     payload: ApiKeyCreateRequest,
     db: Session = Depends(get_db),
-    _ctx=Depends(require_role("admin", "owner")),
+    ctx: PGLRequestContext = Depends(require_role("admin", "owner")),
 ):
+    _authorize_account(ctx, account_id)
+    if payload.account_id is not None and payload.account_id != account_id:
+        # The body must not redirect the key to an account other than the authorized one.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="account_id in body must match the account in the path",
+        )
     account = db.execute(select(models.Account).where(models.Account.id == account_id)).scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown account_id")
     service = ApiKeyService(db)
     try:
-        raw_key, key = service.issue_api_key(account_id=account_id, payload=payload)
+        raw_key, key = service.issue_api_key(
+            account_id=account_id, payload=payload, issuer_role=ctx.role
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return ApiKeyCreateResponse(
@@ -83,8 +109,9 @@ def create_api_key(
 def list_api_keys(
     account_id: int,
     db: Session = Depends(get_db),
-    _ctx=Depends(require_role("admin", "owner")),
+    ctx: PGLRequestContext = Depends(require_role("admin", "owner")),
 ):
+    _authorize_account(ctx, account_id)
     account = db.execute(select(models.Account).where(models.Account.id == account_id)).scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown account_id")
@@ -112,8 +139,9 @@ def revoke_api_key(
     account_id: int,
     api_key_id: int,
     db: Session = Depends(get_db),
-    _ctx=Depends(require_role("admin", "owner")),
+    ctx: PGLRequestContext = Depends(require_role("admin", "owner")),
 ):
+    _authorize_account(ctx, account_id)
     service = ApiKeyService(db)
     try:
         service.revoke_api_key(account_id=account_id, api_key_id=api_key_id)
