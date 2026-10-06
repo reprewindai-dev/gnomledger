@@ -452,6 +452,36 @@ class LedgerChainVerifyRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=255)
 
 
+class LedgerCheckpoint(BaseModel):
+    """A signed statement that an agent's chain had event_count events ending in
+    head_event_hash at issued_at. The signature covers every field except signature, in
+    pgl-c14n form. Keep a copy; POST it to /ledger/checkpoints/verify later."""
+
+    schema_version: Literal["pgl.checkpoint.v1"]
+    issuer: str = Field(max_length=64)
+    key_id: str = Field(max_length=64)
+    agent_id: str = Field(min_length=1, max_length=36)
+    event_count: int = Field(ge=0)
+    head_event_hash: str | None = Field(max_length=128)
+    issued_at: str = Field(max_length=64)
+    signature: SignatureBlock
+
+    def signed_body(self) -> dict[str, Any]:
+        return self.model_dump(exclude={"signature"})
+
+
+class CheckpointVerifyResponse(BaseModel):
+    # valid: signature verifies, the current chain extends the checkpoint, and the chain's
+    # hashes verify. Chain fields stay null when the signature does not verify.
+    valid: bool
+    signature_valid: bool
+    key_id_known: bool
+    agent_found: bool | None
+    chain_intact: bool | None
+    extends_checkpoint: bool | None
+    reason: str
+
+
 class LineageTreeNode(BaseModel):
     agent_id: str
     name: str

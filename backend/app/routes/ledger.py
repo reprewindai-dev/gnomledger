@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from ..dependencies import get_db, require_role
 from ..public_proof import PublicLedgerProofResponse, to_public_ledger_proof
 from ..schemas import (
+    CheckpointVerifyResponse,
     LedgerChainVerifyRequest,
+    LedgerCheckpoint,
     LedgerEventCreate,
     LedgerEventResponse,
     PGLRequestContext,
@@ -90,6 +92,32 @@ def verify_agent_chain(
         return LedgerChainVerifyRequest(**payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/agents/{agent_id}/checkpoint", response_model=LedgerCheckpoint)
+def get_agent_checkpoint(
+    agent_id: str,
+    db: DbSession,
+    ctx: ViewerContext,
+) -> LedgerCheckpoint:
+    """Signed {agent_id, event_count, head_event_hash, issued_at}. An outside party keeps it
+    and later detects truncation or rewrite with POST /ledger/checkpoints/verify."""
+    try:
+        return LedgerCheckpoint(
+            **LedgerService(db).issue_checkpoint(agent_id, account_id=ctx.account_id)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/checkpoints/verify", response_model=CheckpointVerifyResponse)
+def verify_checkpoint(
+    checkpoint: LedgerCheckpoint,
+    db: DbSession,
+    # Public route - intentionally no auth. Chain state is evaluated only for checkpoints
+    # carrying this ledger's valid signature, and only booleans are returned.
+) -> CheckpointVerifyResponse:
+    return CheckpointVerifyResponse(**LedgerService(db).verify_checkpoint(checkpoint))
 
 
 @router.get("/signing-key")

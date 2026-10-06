@@ -9,9 +9,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..schemas import LedgerEventCreate, LedgerEventResponse
+from ..schemas import LedgerCheckpoint, LedgerEventCreate, LedgerEventResponse
 from ..utils import canonical_timestamp, short_id, stable_hash, utc_now
 from .analytics_service import AnalyticsService
+from .signing_service import ISSUER, get_signer
+
+CHECKPOINT_SCHEMA_VERSION = "pgl.checkpoint.v1"
 
 _SQLITE_APPEND_LOCK = threading.Lock()
 
@@ -273,45 +276,23 @@ class LedgerService:
             for e in events
         ]
 
-    def verify_chain(
-        self, agent_id: str, *, account_id: int | None = None
-    ) -> tuple[bool, dict[str, object]]:
-        agent = self._resolve_agent(agent_id, account_id)
-
-        events = list(
+    def chain_events(self, agent: models.Agent) -> list[models.LedgerEvent]:
+        """The agent's whole chain in chain order, as stored now. populate_existing: a
+        verification must read the database, not objects cached earlier in the session."""
+        return list(
             self.db.execute(
                 select(models.LedgerEvent)
                 .where(models.LedgerEvent.agent_id == agent.id)
                 .order_by(models.LedgerEvent.created_at.asc(), models.LedgerEvent.id.asc())
+                .execution_options(populate_existing=True)
             ).scalars()
         )
 
+    @staticmethod
+    def chain_errors(agent: models.Agent, events: list[models.LedgerEvent]) -> list[str]:
         errors: list[str] = []
-        latest_hash = None
         previous: str | None = None
-        first_event_at = None
-        last_event_at = None
-
-        if not events:
-            return (
-                False,
-                {
-                    "status": "unmeasured",
-                    "valid": None,
-                    "checked_events": 0,
-                    "first_event_at": None,
-                    "last_event_at": None,
-                    "latest_event_hash": None,
-                    "errors": [],
-                    "reason": "No ledger events have been recorded for this agent.",
-                },
-            )
-
         for event in events:
-            if first_event_at is None:
-                first_event_at = event.created_at
-            last_event_at = event.created_at
-
             expected = stable_hash(
                 {
                     "event_id": event.event_id,
@@ -329,17 +310,115 @@ class LedgerService:
             if event.prev_event_hash != previous:
                 errors.append(f"chain break at {event.event_id}")
             previous = event.event_hash
-            latest_hash = event.event_hash
+        return errors
 
+    # -- signed checkpoints ----------------------------------------------------------------
+
+    def issue_checkpoint(self, agent_id: str, *, account_id: int) -> dict[str, Any]:
+        """A signed statement of the chain's length and head. A holder can later ask
+        verify_checkpoint whether the ledger still extends it (no truncation, no rewrite)."""
+        agent = self._resolve_agent(agent_id, account_id)
+        events = self.chain_events(agent)
+        signer = get_signer()
+        body = {
+            "schema_version": CHECKPOINT_SCHEMA_VERSION,
+            "issuer": ISSUER,
+            "key_id": signer.key_id,
+            "agent_id": agent.agent_id,
+            "event_count": len(events),
+            "head_event_hash": events[-1].event_hash if events else None,
+            "issued_at": utc_now().isoformat(),
+        }
+        return {**body, "signature": signer.sign(body)}
+
+    def verify_checkpoint(self, checkpoint: LedgerCheckpoint) -> dict[str, Any]:
+        """Public check. Nothing about the chain is evaluated or disclosed unless the
+        checkpoint carries this ledger's valid signature."""
+        signer = get_signer()
+        result: dict[str, Any] = {
+            "valid": False,
+            "signature_valid": False,
+            "key_id_known": checkpoint.key_id == signer.key_id == checkpoint.signature.key_id,
+            "agent_found": None,
+            "chain_intact": None,
+            "extends_checkpoint": None,
+            "reason": "",
+        }
+        if not result["key_id_known"]:
+            result["reason"] = "Checkpoint is not signed with this ledger's current key_id."
+            return result
+        if not signer.verify(checkpoint.signed_body(), checkpoint.signature.model_dump()):
+            result["reason"] = (
+                "Signature does not verify: the checkpoint was altered or not issued here."
+            )
+            return result
+        result["signature_valid"] = True
+
+        agent = self.db.execute(
+            select(models.Agent).where(models.Agent.agent_id == checkpoint.agent_id)
+        ).scalar_one_or_none()
+        result["agent_found"] = agent is not None
+        if agent is None:
+            result["extends_checkpoint"] = False
+            result["reason"] = "The checkpointed agent is no longer present in the ledger."
+            return result
+
+        events = self.chain_events(agent)
+        result["chain_intact"] = not self.chain_errors(agent, events)
+        count = checkpoint.event_count
+        if len(events) < count:
+            result["extends_checkpoint"] = False
+            result["reason"] = (
+                "The chain is shorter than the checkpoint attests: events were removed "
+                "(truncation)."
+            )
+        elif count == 0:
+            result["extends_checkpoint"] = checkpoint.head_event_hash is None
+            result["reason"] = "Checkpoint attested an empty chain."
+        elif events[count - 1].event_hash != checkpoint.head_event_hash:
+            result["extends_checkpoint"] = False
+            result["reason"] = (
+                f"Event #{count} no longer has the attested hash: history was rewritten."
+            )
+        else:
+            result["extends_checkpoint"] = True
+            result["reason"] = "The ledger extends the checkpoint."
+        if result["extends_checkpoint"] and not result["chain_intact"]:
+            result["reason"] = "The ledger extends the checkpoint but its hash chain is broken."
+        result["valid"] = bool(result["extends_checkpoint"] and result["chain_intact"])
+        return result
+
+    def verify_chain(
+        self, agent_id: str, *, account_id: int | None = None
+    ) -> tuple[bool, dict[str, object]]:
+        agent = self._resolve_agent(agent_id, account_id)
+        events = self.chain_events(agent)
+
+        if not events:
+            return (
+                False,
+                {
+                    "status": "unmeasured",
+                    "valid": None,
+                    "checked_events": 0,
+                    "first_event_at": None,
+                    "last_event_at": None,
+                    "latest_event_hash": None,
+                    "errors": [],
+                    "reason": "No ledger events have been recorded for this agent.",
+                },
+            )
+
+        errors = self.chain_errors(agent, events)
         return (
             len(errors) == 0,
             {
                 "status": "verified" if not errors else "blocked",
                 "valid": len(errors) == 0,
                 "checked_events": len(events),
-                "first_event_at": first_event_at,
-                "last_event_at": last_event_at,
-                "latest_event_hash": latest_hash,
+                "first_event_at": events[0].created_at,
+                "last_event_at": events[-1].created_at,
+                "latest_event_hash": events[-1].event_hash,
                 "errors": errors,
                 "reason": (
                     "Ledger chain verified." if not errors else "Ledger chain verification failed."
