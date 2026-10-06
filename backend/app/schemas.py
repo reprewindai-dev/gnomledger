@@ -356,9 +356,21 @@ class AgentDetailResponse(AgentResponse):
 
 
 class GenomeUpdateRequest(BaseModel):
-    actor: str = Field(min_length=1, max_length=255)
+    # Who the caller says made the change. Recorded as declared_actor; the ledger also records
+    # changed_by from the API key that authenticated the request.
+    actor: str | None = Field(default=None, min_length=1, max_length=255)
     changes: GenomePayload
-    note: str = "Genome update"
+    note: str = Field(default="Genome update", max_length=255)
+    # Why the change was made / who approved it. Required: a change without a reason is not
+    # auditable.
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank")
+        return value.strip()
 
 
 class LedgerEventCreate(BaseModel):

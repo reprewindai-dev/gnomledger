@@ -16,7 +16,8 @@ from ..schemas import (
     ExecutionValidateResponse,
 )
 from ..services.certificate_service import CertificateService, certificate_view
-from ..services.genome_service import GenomeService
+from ..services.genome_service import GenomeConflict, GenomeService
+from ..services.principal import describe_principal
 from .. import models
 
 router = APIRouter()
@@ -185,13 +186,18 @@ def update_genome(
 ) -> GenomePayload:
     service = GenomeService(db)
     try:
-        return service.update_genome(agent_id, payload, account_id=ctx.account_id)
+        return service.update_genome(
+            agent_id,
+            payload,
+            account_id=ctx.account_id,
+            changed_by=describe_principal(db, ctx),
+        )
     except ValueError as exc:
         message = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND
         if "unknown" in message:
             status_code = status.HTTP_404_NOT_FOUND
-        elif "unchanged" in message:
+        elif "unchanged" in message or isinstance(exc, GenomeConflict):
             status_code = status.HTTP_409_CONFLICT
         else:
             status_code = status.HTTP_400_BAD_REQUEST

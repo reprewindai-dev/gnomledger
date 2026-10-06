@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +14,8 @@ from ..utils import canonical_timestamp, short_id, stable_hash, utc_now
 from .analytics_service import AnalyticsService
 
 _SQLITE_APPEND_LOCK = threading.Lock()
+
+PrepareHook = Callable[[models.Agent], "dict[str, Any] | None"]
 
 
 class LedgerService:
@@ -41,11 +44,26 @@ class LedgerService:
         return agent
 
     def log_event(
-        self, payload: LedgerEventCreate, *, account_id: int | None = None
+        self,
+        payload: LedgerEventCreate,
+        *,
+        account_id: int | None = None,
+        prepare: PrepareHook | None = None,
     ) -> LedgerEventResponse:
+        """Append one event to the agent's chain.
+
+        prepare, if given, runs after the agent row is locked and before the event is built,
+        in the same transaction: it may change the locked agent or add rows (a genome version,
+        a status change) and returns details to merge into the event. Its writes and the event
+        commit together or not at all. It may raise to abort the append.
+        """
         connection = self.db.connection()
         if connection.dialect.name != "sqlite":
-            return self._append_event(payload, account_id)
+            try:
+                return self._append_event(payload, account_id, prepare)
+            except Exception:
+                self.db.rollback()
+                raise
         # SQLite has no row locks and ignores FOR UPDATE, and the driver opens a transaction
         # only at the first write, after the chain head has been read. So the append takes
         # the database write lock before that read (this also covers other processes). The
@@ -56,14 +74,17 @@ class LedgerService:
             try:
                 if not connection.connection.dbapi_connection.in_transaction:
                     connection.exec_driver_sql("BEGIN IMMEDIATE")
-                return self._append_event(payload, account_id)
+                return self._append_event(payload, account_id, prepare)
             finally:
                 # Never leave the process lock while still holding the database lock.
                 if self.db.in_transaction():
                     self.db.rollback()
 
     def _append_event(
-        self, payload: LedgerEventCreate, account_id: int | None
+        self,
+        payload: LedgerEventCreate,
+        account_id: int | None,
+        prepare: PrepareHook | None = None,
     ) -> LedgerEventResponse:
         # Appends to one agent's chain are serialized on the agent row. Without the lock two
         # concurrent appends read the same chain head and both link to it, forking the chain
@@ -102,6 +123,12 @@ class LedgerService:
                     idempotent_replay=True,
                     chain_head=existing.event_hash,
                 )
+
+        if prepare is not None:
+            extra = prepare(agent)
+            if extra:
+                payload = payload.model_copy(update={"details": {**payload.details, **extra}})
+            self.db.flush()
 
         event = models.LedgerEvent(
             agent_id=agent.id,

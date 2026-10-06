@@ -134,6 +134,7 @@ def test_outsider_cannot_update_foreign_agent_genome(tenants):
     body = {
         "actor": "outsider",
         "note": "cross-tenant mutation",
+        "reason": "model upgrade",
         "changes": {
             "model_family": "transformer",
             "model_version": "2",
