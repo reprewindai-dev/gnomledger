@@ -14,6 +14,7 @@ from ..schemas import (
     PGLRequestContext,
 )
 from ..services.ledger_service import LedgerService
+from ..services.signing_service import get_signer
 
 router = APIRouter()
 
@@ -83,6 +84,13 @@ def verify_agent_chain(
         return LedgerChainVerifyRequest(**payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/signing-key")
+def get_signing_key() -> dict:
+    """Public, no auth. Same document as /.well-known/pgl-signing-key, served under /api so
+    deployments that only route /api/* (Vercel) expose it too."""
+    return get_signer().public_descriptor()
 
 
 @router.get("/proof/{hash}", response_model=PublicLedgerProofResponse)

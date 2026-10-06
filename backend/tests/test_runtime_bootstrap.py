@@ -5,9 +5,11 @@ import pytest
 from app import models
 from app.config import Settings
 from app.services.bootstrap_service import ensure_runtime_bootstrap
+from app.services.signing_service import generate_private_key_pem
 
 
 RUNTIME_KEY = "pgl_runtime_key_that_is_long_enough_for_prod_001"
+SIGNING_KEY_PEM = generate_private_key_pem()  # prod settings refuse to load without one
 
 
 def _settings(key: str | None = RUNTIME_KEY) -> Settings:
@@ -16,6 +18,7 @@ def _settings(key: str | None = RUNTIME_KEY) -> Settings:
         api_key_secret="bootstrap-test-secret-that-is-at-least-32-characters",
         bootstrap_admin_token="bootstrap-admin-test-secret",
         pgl_ledger_api_key=key,
+        pgl_signing_key_pem=SIGNING_KEY_PEM,
     )
 
 

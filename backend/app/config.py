@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +54,10 @@ class Settings(BaseSettings):
 
     frontend_origin: str | None = None
     certificate_storage_path: str = Field(default_factory=_default_certificate_storage_path)
+    # Ed25519 key that signs birth certificates, checkpoints and audit bundles. Required in
+    # prod; in dev/staging a key is generated once under the data directory if both are unset.
+    pgl_signing_key_pem: str | None = Field(default=None, repr=False)
+    pgl_signing_key_path: str | None = None
     request_id_header: str = "x-request-id"
 
     @field_validator("environment")
@@ -89,6 +94,38 @@ class Settings(BaseSettings):
                 f"pgl_ledger_api_key must be at least {minimum} characters"
             )
         return value
+
+    @field_validator("pgl_signing_key_pem", "pgl_signing_key_path")
+    @classmethod
+    def _blank_signing_key_is_unset(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return value.strip()
+
+    @model_validator(mode="after")
+    def _require_signing_key_in_prod(self) -> "Settings":
+        if self.environment != "prod":
+            return self
+        if not self.pgl_signing_key_pem and not self.pgl_signing_key_path:
+            raise ValueError(
+                "PGL_SIGNING_KEY_PEM or PGL_SIGNING_KEY_PATH must be set in production: the "
+                "ledger signs birth certificates and checkpoints with this Ed25519 key"
+            )
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        try:
+            if self.pgl_signing_key_pem:
+                pem = self.pgl_signing_key_pem.replace("\\n", "\n").encode("utf-8")
+            else:
+                pem = Path(self.pgl_signing_key_path).read_bytes()
+            key = serialization.load_pem_private_key(pem, password=None)
+        except (OSError, ValueError, TypeError) as exc:
+            # The exception text is not echoed: it could quote key material.
+            raise ValueError(f"PGL signing key could not be loaded ({type(exc).__name__})") from None
+        if not isinstance(key, Ed25519PrivateKey):
+            raise ValueError("PGL signing key must be an Ed25519 private key")
+        return self
 
 
 @lru_cache(maxsize=1)

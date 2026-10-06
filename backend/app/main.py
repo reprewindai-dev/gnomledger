@@ -225,6 +225,13 @@ def _build_app() -> FastAPI:
             ).model_dump(mode="json"),
         )
 
+    @app.get("/.well-known/pgl-signing-key", tags=["discovery"])
+    async def pgl_signing_key():
+        """Public half of the ledger's Ed25519 signing key (also at /api/v1/ledger/signing-key)."""
+        from .services.signing_service import get_signer
+
+        return get_signer().public_descriptor()
+
     @app.get("/.well-known/x402.json", tags=["discovery"])
     async def x402_discovery():
         return JSONResponse(

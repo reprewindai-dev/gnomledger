@@ -14,7 +14,17 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 # Libraries pinned in both files. uvicorn carries extras in both, handled by the regex.
-SHARED = ("fastapi", "uvicorn", "sqlalchemy", "psycopg", "pydantic", "pydantic-settings", "httpx", "stripe")
+SHARED = (
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "psycopg",
+    "pydantic",
+    "pydantic-settings",
+    "httpx",
+    "stripe",
+    "cryptography",
+)
 
 
 def _requirement_pins() -> dict[str, str]:
