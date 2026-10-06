@@ -141,6 +141,33 @@ class BirthCertificate(Base):
     certificate_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
     agent: Mapped[Agent] = relationship(back_populates="certificate")
+    signature: Mapped["CertificateSignature"] = relationship(
+        back_populates="certificate", uselist=False
+    )
+
+
+class CertificateSignature(Base):
+    """Ed25519 signature over a birth certificate's certificate_payload.
+
+    A separate table (not a column on birth_certificates) so that existing databases gain it
+    through create_all without a migration. Certificates issued before signing have no row.
+    """
+
+    __tablename__ = "certificate_signatures"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    birth_certificate_id: Mapped[int] = mapped_column(
+        ForeignKey("birth_certificates.id"), unique=True, nullable=False
+    )
+    algorithm: Mapped[str] = mapped_column(String(16), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    signature: Mapped[str] = mapped_column(String(256), nullable=False)
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    certificate: Mapped[BirthCertificate] = relationship(back_populates="signature")
+
+    def block(self) -> dict[str, str]:
+        return {"algorithm": self.algorithm, "key_id": self.key_id, "value": self.signature}
 
 
 class LedgerEvent(Base):

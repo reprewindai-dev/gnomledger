@@ -15,7 +15,7 @@ from ..schemas import (
     ExecutionValidateRequest,
     ExecutionValidateResponse,
 )
-from ..services.certificate_service import CertificateService
+from ..services.certificate_service import CertificateService, certificate_view
 from ..services.genome_service import GenomeService
 from .. import models
 
@@ -173,11 +173,7 @@ def get_certificate(
     cert = agent.certificate
     if not cert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found")
-    return CertificateDownloadResponse(
-        certificate_id=cert.certificate_id,
-        document_uri=cert.document_uri,
-        issued_at=cert.issued_at,
-    )
+    return certificate_view(db, cert)
 
 
 @router.patch("/{agent_id}/genome", response_model=GenomePayload)

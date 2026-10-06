@@ -4,9 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..schemas import AgentResponse, GenomePayload, LineageTreeNode
+from ..schemas import AgentResponse, GenomePayload, LedgerEventCreate, LineageTreeNode
 from .billing_service import BillingService
-from ..utils import short_id
+from .certificate_service import build_certificate_document, certificate_view, sign_certificate
+from .ledger_service import LedgerService
+from .signing_service import get_signer
+from ..utils import short_id, utc_now
 
 
 class LineageService:
@@ -61,6 +64,7 @@ class LineageService:
         if source.account_id != new_agent.account_id:
             raise ValueError("Cross-account lineage is not permitted")
 
+        issued_at = utc_now()
         new_genome = models.GenomeVersion(
             agent_id=new_agent.id,
             version=1,
@@ -73,14 +77,30 @@ class LineageService:
             certificate_id=new_certificate_id,
             genome_hash=latest_genome.genome_hash,
             parent_agent_ids=[source.agent_id],
+            issued_at=issued_at,
         )
         edge = models.LineageEdge(parent_agent_id=source.id, child_agent_id=new_agent.id)
 
         self.db.add_all([new_genome, certificate, edge])
+        self.db.flush()
+        # A fork is a birth: it gets the same signed certificate as a registration.
+        sign_certificate(
+            self.db,
+            certificate,
+            build_certificate_document(
+                agent=new_agent,
+                certificate_id=new_certificate_id,
+                genome=GenomePayload(**latest_genome.payload),
+                genome_hash=latest_genome.genome_hash,
+                genome_version=1,
+                parent_agent_ids=[source.agent_id],
+                issued_at=issued_at,
+                key_id=get_signer().key_id,
+            ),
+        )
 
         # Recalculate trust snapshot and save to DB in same transaction
         from .trust_policy import TrustPolicyV1
-        from ..utils import utc_now
         trust_data = TrustPolicyV1.calculate_trust([])
         
         snapshot = models.AgentTrustSnapshot(
@@ -95,7 +115,25 @@ class LineageService:
         new_agent.trust_snapshot = snapshot
 
         self.db.commit()
+
+        # Forks used to start with an empty chain, so their birth was not in the ledger.
+        LedgerService(self.db).log_event(
+            LedgerEventCreate(
+                agent_id=new_agent.agent_id,
+                event_type="birth_registration",
+                actor=creator,
+                summary=f"Forked agent '{new_name}' from {source.agent_id}"[:255],
+                details={
+                    "certificate_id": new_certificate_id,
+                    "jurisdiction": jurisdiction,
+                    "parent_agent_ids": [source.agent_id],
+                    "forked_from_genome_hash": latest_genome.genome_hash,
+                },
+            ),
+            account_id=account_id,
+        )
         self.db.refresh(new_agent)
+        snapshot = new_agent.trust_snapshot
 
         genome_payload = GenomePayload(**latest_genome.payload)
         return AgentResponse(
@@ -113,6 +151,7 @@ class LineageService:
             genome=genome_payload,
             parent_agent_ids=[source.agent_id],
             created_at=new_agent.created_at,
+            certificate=certificate_view(self.db, certificate),
         )
 
     def _build_tree(self, agent: models.Agent, visited: set[int] | None = None) -> LineageTreeNode:

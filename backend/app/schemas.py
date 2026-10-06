@@ -305,6 +305,30 @@ class PostExecutionAttestationDetails(BaseModel):
     standards_compliance: list[StandardComplianceResult] = Field(default_factory=list)
 
 
+class SignatureBlock(BaseModel):
+    """Ed25519 signature over the pgl-c14n bytes of the signed document (see signing key)."""
+
+    algorithm: Literal["Ed25519"]
+    key_id: str = Field(min_length=1, max_length=64)
+    value: str = Field(min_length=1, max_length=256)  # base64url, no padding
+
+
+class CertificateDownloadResponse(BaseModel):
+    certificate_id: str
+    document_uri: str | None
+    issued_at: datetime
+    # "signed": certificate + signature verify against the published key.
+    # "unsigned_legacy": issued before signing existed; certificate is the v1 payload or null.
+    signature_status: Literal["signed", "unsigned_legacy"] = "unsigned_legacy"
+    certificate: dict[str, Any] | None = None
+    signature: SignatureBlock | None = None
+    key_id: str | None = None
+    missing_accountability_fields: list[str] = Field(default_factory=list)
+    missing_integrity_fields: list[str] = Field(default_factory=list)
+    # The birth certificate is immutable; later genome versions are in the genome history.
+    current_genome_hash: str | None = None
+
+
 class AgentResponse(BaseModel):
     agent_id: str
     certificate_id: str
@@ -320,6 +344,9 @@ class AgentResponse(BaseModel):
     genome: GenomePayload
     parent_agent_ids: list[str]
     created_at: datetime
+    # Set on registration and fork responses; list/detail responses leave it null (use
+    # GET /agents/{agent_id}/certificate).
+    certificate: CertificateDownloadResponse | None = None
 
 
 class AgentDetailResponse(AgentResponse):
@@ -426,12 +453,6 @@ class HealthResponse(BaseModel):
     timestamp: datetime
     database: Literal["ready", "initializing", "unavailable"] | None = None
     detail: str | None = None
-
-
-class CertificateDownloadResponse(BaseModel):
-    certificate_id: str
-    document_uri: str | None
-    issued_at: datetime
 
 
 class ApiKeyCreateRequest(BaseModel):
