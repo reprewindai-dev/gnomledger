@@ -4,7 +4,7 @@ Project Genome Ledger (PGL) monetizes the accountability layer for AI systems by
 
 ## Customer Segments
 
-1. **Regulated AI Builders** — banks, insurers, healthcare networks, national security contractors deploying high-stakes AI agents. Need verifiable provenance, change control, and tamper-proof audit trails.
+1. **Regulated AI Builders** — banks, insurers, healthcare networks, national security contractors deploying high-stakes AI agents. Need verifiable provenance, change control, and tamper-evident, hash-chained audit trails.
 2. **AI Assurance & Audit Firms** — third-party assessors offering compliance packages (NIST AI RMF, EU AI Act) that require structured registries, lineage proof, and incident logs.
 3. **Enterprise Platform Teams** — internal AI platform groups responsible for “copilot factories” across business units; they require centralized inventory, certificate issuance, and lifecycle policies.
 4. **Government / Public Sector Programs** — agencies establishing AI assurance registries and vendor review pipelines.
@@ -13,7 +13,7 @@ Project Genome Ledger (PGL) monetizes the accountability layer for AI systems by
 
 - **Regulatory Readiness:** Automated issuance of AI birth certificates, lineage tracking, and ledger exports that align with EU AI Act, NIST AI RMF, ISO/IEC 42001, and internal policy audits.
 - **Operational Control:** Per-agent lifecycle policies, incident logging, deployment attestations, and chargeback visibility across business units.
-- **Investor-Grade Accountability:** Demonstrates governance maturity to stakeholders by exposing tamper-proof histories and verifiable lineage trees.
+- **Investor-Grade Accountability:** Demonstrates governance maturity to stakeholders by exposing tamper-evident, hash-chained histories (unsigned and not externally anchored) and verifiable lineage trees.
 
 ## Pricing Tiers
 
@@ -28,7 +28,7 @@ Project Genome Ledger (PGL) monetizes the accountability layer for AI systems by
 - **Ledger Storage Metering:** Aggregated monthly by GB across hot + cold storage, with automated tiered pricing.
 - **Lineage Analytics:** Each rendered lineage tree beyond allowance bills at $15 per render for Launch tier and $5 for Scale.
 - **Incident Response Add-on:** $1,500/month includes automated incident workflows, SLA-backed triage, and legal-ready exports.
-- **API Usage Limits:** Signed JWT ensures requests carry account context; rate limiting tiers enforce 100/1,000/10,000 requests per minute.
+- **API Usage Limits:** Requests carry account context through role-scoped API keys (`x-api-key`, HMAC-hashed at rest); plan quotas are enforced per metric by the billing service (HTTP 402 when exceeded). Per-minute rate limiting is not implemented.
 
 ## Payment & Access Control Flow
 

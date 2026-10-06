@@ -4,7 +4,7 @@
 
 # Project Genome Ledger (PGL)
 
-Project Genome Ledger is a production-ready control plane for:
+Project Genome Ledger is a pre-production control plane for:
 
 - issuing AI agent birth certificates
 - versioning agent genomes
