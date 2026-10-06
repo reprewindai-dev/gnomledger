@@ -16,6 +16,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy import event, func, select
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -39,7 +41,11 @@ class Account(Base):
     )
 
     users: Mapped[list["User"]] = relationship(back_populates="account", cascade="all, delete-orphan")
-    agents: Mapped[list["Agent"]] = relationship(back_populates="account", cascade="all, delete-orphan")
+    # Retention: deleting an account must not delete its agents' records (see
+    # _refuse_record_deletion below); the relationship never cascades deletes.
+    agents: Mapped[list["Agent"]] = relationship(
+        back_populates="account", cascade="save-update, merge", passive_deletes="all"
+    )
     api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="account", cascade="all, delete-orphan")
     billing_usage: Mapped[list["BillingUsage"]] = relationship(back_populates="account", cascade="all, delete-orphan")
 
@@ -95,10 +101,18 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     account: Mapped[Account] = relationship(back_populates="agents")
-    genome_versions: Mapped[list["GenomeVersion"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
-    certificate: Mapped["BirthCertificate"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")
+    # Retention: genome versions, the birth certificate and ledger events outlive the agent
+    # row's lifecycle. These relationships never cascade deletes; decommission instead.
+    genome_versions: Mapped[list["GenomeVersion"]] = relationship(
+        back_populates="agent", cascade="save-update, merge", passive_deletes="all"
+    )
+    certificate: Mapped["BirthCertificate"] = relationship(
+        back_populates="agent", uselist=False, cascade="save-update, merge", passive_deletes="all"
+    )
     trust_snapshot: Mapped["AgentTrustSnapshot"] = relationship(back_populates="agent", uselist=False, cascade="all, delete-orphan")
-    ledger_events: Mapped[list["LedgerEvent"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    ledger_events: Mapped[list["LedgerEvent"]] = relationship(
+        back_populates="agent", cascade="save-update, merge", passive_deletes="all"
+    )
     parent_edges: Mapped[list["LineageEdge"]] = relationship(
         back_populates="child", foreign_keys="LineageEdge.child_agent_id", cascade="all, delete-orphan"
     )
@@ -313,3 +327,45 @@ class AgentTrustSnapshot(Base):
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     agent: Mapped[Agent] = relationship(back_populates="trust_snapshot")
+
+
+# ---------------------------------------------------------------------------
+# Retention guards
+# ---------------------------------------------------------------------------
+
+
+class RetentionViolation(RuntimeError):
+    """An ORM delete or rewrite of a record the ledger keeps for audit."""
+
+
+_RETAINED = (Agent, GenomeVersion, BirthCertificate, CertificateSignature, LedgerEvent)
+_APPEND_ONLY = (GenomeVersion, CertificateSignature, LedgerEvent)
+
+
+def _refuse_record_deletion(mapper, connection, target) -> None:
+    raise RetentionViolation(
+        f"{type(target).__name__} records are retained for audit and cannot be deleted; "
+        "decommission the agent instead"
+    )
+
+
+def _refuse_record_rewrite(mapper, connection, target) -> None:
+    if any(attr.history.has_changes() for attr in sa_inspect(target).attrs):
+        raise RetentionViolation(f"{type(target).__name__} records are append-only")
+
+
+def _refuse_account_deletion_with_agents(mapper, connection, target) -> None:
+    agents = connection.execute(
+        select(func.count()).select_from(Agent).where(Agent.account_id == target.id)
+    ).scalar_one()
+    if agents:
+        raise RetentionViolation(
+            "account has registered agents whose records are retained; it cannot be deleted"
+        )
+
+
+for _model in _RETAINED:
+    event.listen(_model, "before_delete", _refuse_record_deletion)
+for _model in _APPEND_ONLY:
+    event.listen(_model, "before_update", _refuse_record_rewrite)
+event.listen(Account, "before_delete", _refuse_account_deletion_with_agents)

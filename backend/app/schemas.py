@@ -385,6 +385,8 @@ class LedgerEventCreate(BaseModel):
         "pre_execution_authorization",
         "post_execution_attestation",
         "custom",
+        # Written only by POST /agents/{agent_id}/decommission (refused on /ledger/events).
+        "decommission",
     ]
     actor: str = Field(min_length=1, max_length=255)
     summary: str = Field(min_length=1, max_length=255)
@@ -398,6 +400,31 @@ class LedgerEventCreate(BaseModel):
         elif self.event_type == "post_execution_attestation":
             PostExecutionAttestationDetails(**self.details)
         return self
+
+
+class DecommissionRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+    # Who the caller says decided it; decommissioned_by is taken from the API key.
+    actor: str | None = Field(default=None, min_length=1, max_length=255)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank")
+        return value.strip()
+
+
+class DecommissionResponse(BaseModel):
+    agent_id: str
+    status: Literal["decommissioned"]
+    decommissioned_at: datetime
+    reason: str
+    decommissioned_by: dict[str, Any]
+    declared_actor: str | None
+    event_id: str
+    event_hash: str
+    retained: dict[str, int]
 
 
 class LedgerEventResponse(BaseModel):

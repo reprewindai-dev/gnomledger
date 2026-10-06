@@ -35,6 +35,12 @@ def create_ledger_event(
     db: DbSession,
     ctx: OperatorContext,
 ) -> LedgerEventResponse:
+    if payload.event_type == "decommission":
+        # A decommission event must coincide with the status change and record its actor.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="decommission events are written only by POST /api/v1/agents/{agent_id}/decommission",
+        )
     service = LedgerService(db)
     try:
         return service.log_event(payload, account_id=ctx.account_id)

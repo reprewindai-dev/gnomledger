@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 
 from app import models
 from app.dependencies import get_db
@@ -199,9 +200,14 @@ def test_tampered_ledger_is_blocked(session):
             details={"env": "prod"},
         )
     )
-    stored = session.query(models.LedgerEvent).filter_by(event_id=event.event_id).one()
-    stored.details = {"env": "tampered"}
+    # The ORM refuses to rewrite ledger events, so tamper the way a database user could.
+    session.execute(
+        update(models.LedgerEvent)
+        .where(models.LedgerEvent.event_id == event.event_id)
+        .values(details={"env": "tampered"})
+    )
     session.commit()
+    session.expire_all()
 
     valid, result = LedgerService(session).verify_chain(created.agent_id)
 

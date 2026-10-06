@@ -10,12 +10,15 @@ from ..schemas import (
     AgentCreateRequest,
     AgentDetailResponse,
     AgentResponse,
+    DecommissionRequest,
+    DecommissionResponse,
     GenomePayload,
     GenomeUpdateRequest,
     ExecutionValidateRequest,
     ExecutionValidateResponse,
 )
 from ..services.certificate_service import CertificateService, certificate_view
+from ..services.decommission_service import AlreadyDecommissioned, DecommissionService
 from ..services.genome_service import GenomeConflict, GenomeService
 from ..services.principal import describe_principal
 from .. import models
@@ -202,6 +205,29 @@ def update_genome(
         else:
             status_code = status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+
+@router.post("/{agent_id}/decommission", response_model=DecommissionResponse)
+def decommission_agent(
+    agent_id: str,
+    payload: DecommissionRequest,
+    db: Session = Depends(get_db),
+    ctx=Depends(require_role("operator", "admin", "owner")),
+) -> DecommissionResponse:
+    """Take an agent out of service. Its status becomes "decommissioned" (execution/validate
+    then refuses it and its genome can no longer change), a decommission event with the
+    reason and the authenticated actor is appended, and every record is kept."""
+    try:
+        return DecommissionService(db).decommission(
+            agent_id,
+            payload,
+            account_id=ctx.account_id,
+            decommissioned_by=describe_principal(db, ctx),
+        )
+    except AlreadyDecommissioned as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post("/{agent_id}/trust/rebuild", response_model=AgentDetailResponse)
