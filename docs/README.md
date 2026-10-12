@@ -5,7 +5,7 @@
 - [Architecture](architecture.md)
 - [Build Scope](build-scope.md)
 - [Deployment Operations](deployment-operations.md)
-- [Deploying on Coolify](coolify-deploy.md)
+- [Deploying on Vercel](vercel-deploy.md)
 - [Revenue Model](revenue-model.md)
 - [Security Compliance](security-compliance.md)
 - [Audit Readiness](AUDIT_READINESS.md)

@@ -60,3 +60,16 @@ def test_docker_requirements_match_ci_pyproject_versions() -> None:
             drift[name] = (pins[name], floors[name])
 
     assert not drift, f"requirements.txt drifted from backend/pyproject.toml: {drift}"
+
+
+def test_root_pyproject_matches_requirements() -> None:
+    """Vercel builds the API from the root pyproject.toml (and uv.lock) or requirements.txt;
+    both must name the same pins, or a deploy can ship an unpatched FastAPI without cryptography."""
+    data = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    root = {}
+    for requirement in data["project"]["dependencies"]:
+        match = re.match(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?==([^\s;#]+)", requirement)
+        assert match, f"root pyproject.toml dependency is not an exact pin: {requirement}"
+        root[match.group(1).lower()] = match.group(2)
+
+    assert root == _requirement_pins()
