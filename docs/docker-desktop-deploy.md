@@ -37,10 +37,35 @@ old chain head, old certificates read `unsigned_legacy` and new ones `signed`. N
    ```
 4. **Keep the data volume** (`veklom-capability-os-rc1_gnomledger-data`).
 
+## One command
+
+`scripts/upgrade-capos-stack.sh` does the steps below for `gnomledger-api` and `cappo-backend`
+and applies the rules above. From WSL on the Docker Desktop host, in a checkout of this repo:
+
+```sh
+scripts/upgrade-capos-stack.sh veklom-staging --dry-run      # shows what it will do
+scripts/upgrade-capos-stack.sh veklom-staging                # asks, then upgrades
+scripts/upgrade-capos-stack.sh veklom-capability-os-rc1 \
+  --pgl-url https://pgl.veklom.com --capi-url https://capi.veklom.com --cappo-url https://cappo.veklom.com
+```
+
+It finds each service by its Compose labels and refuses to run if the service's build context
+has uncommitted changes or is not on `main`, or if `API_KEY_SECRET` is missing. It backs up the
+data volumes and env file to `~/veklom-backups/`, fast-forwards `main`, and in prod generates
+`PGL_SIGNING_KEY_PEM` once (kept in `~/.veklom-secrets/`; copy it off the host). It then
+rebuilds that one service and waits for it to report healthy. If the service is not healthy,
+it resets `main` to the previous commit, restores the env file, rebuilds, and exits non-zero.
+
+Rehearsed on a copy of the stack built from `e1ce7a7` with existing ledger data:
+
+- **Upgrade:** the old agent and events were still readable and verified, and a new event linked onto the old chain head.
+- **Broken release on `main`:** the script rolled back to `e1ce7a7`, healthy, with the data unchanged.
+- **Second run:** no-op, and no duplicate key was generated.
+
 ## Steps
 
-Do `veklom-staging` first, run the check in step 5 against it, then repeat for
-`veklom-capability-os-rc1`.
+The manual equivalent. Do `veklom-staging` first, run the check in step 5 against it, then
+repeat for `veklom-capability-os-rc1`.
 
 1. **Find the stack's compose file and service name** (PowerShell or WSL):
    ```sh
