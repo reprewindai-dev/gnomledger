@@ -1,0 +1,73 @@
+# Coolify stack: Genome Ledger API + Postgres + PGL Studio.
+#
+# Coolify → New Resource → Docker Compose → this repo, compose file `docker-compose.coolify.yml`.
+# Step-by-step setup, required variables and verification: docs/coolify-deploy.md.
+#
+# SERVICE_FQDN_* / SERVICE_PASSWORD_* / SERVICE_USER_* are Coolify magic variables: Coolify
+# generates each value once, keeps it stable across redeploys, and shows it under
+# Environment Variables. SERVICE_FQDN_<NAME>_<PORT> tells Traefik which port to route to.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${SERVICE_USER_POSTGRES}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: pgl
+    volumes:
+      - pgl-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d pgl"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  gnomledger:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVICE_FQDN_GNOMLEDGER_8001: ${SERVICE_FQDN_GNOMLEDGER_8001}
+      ENVIRONMENT: prod
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/pgl
+      CERTIFICATE_STORAGE_PATH: /app/data/certificates
+      # Secrets Coolify generates on first deploy.
+      API_KEY_SECRET: ${SERVICE_PASSWORD_64_APIKEYSECRET}
+      BOOTSTRAP_ADMIN_TOKEN: ${SERVICE_PASSWORD_64_BOOTSTRAP}
+      # The Capability OS runtime key. cAPI and CAPPO must send this same value as
+      # PGL_LEDGER_API_KEY / GNOMLEDGER_API_KEY. Never change it once the database exists:
+      # gnomledger refuses to start when the configured key does not match.
+      PGL_LEDGER_API_KEY: ${SERVICE_PASSWORD_64_PGLLEDGER}
+      # Ed25519 signing key (PEM; literal "\n" line breaks are accepted). Required in prod.
+      PGL_SIGNING_KEY_PEM: ${PGL_SIGNING_KEY_PEM:?Set PGL_SIGNING_KEY_PEM - see docs/coolify-deploy.md}
+      # cAPI registry. Leave CAPI_BACKEND_URL empty to skip registration.
+      CAPI_BACKEND_URL: ${CAPI_BACKEND_URL:-}
+      CAPI_API_KEY: ${CAPI_API_KEY:-}
+      # Extra browser origins allowed to call this API directly, as a JSON list.
+      CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+    volumes:
+      - pgl-data:/app/data
+
+  pgl-studio:
+    build:
+      # PGL Studio lives in its own repository; Docker builds it straight from GitHub.
+      context: https://github.com/reprewindai-dev/pgl-studioai.git#${PGL_STUDIO_REF:-main}
+    restart: unless-stopped
+    depends_on:
+      - gnomledger
+    environment:
+      SERVICE_FQDN_PGLSTUDIO_3000: ${SERVICE_FQDN_PGLSTUDIO_3000}
+      PGL_BACKEND_URL: http://gnomledger:8001
+      # Dedicated Studio key, issued after the first deploy (docs/coolify-deploy.md, step 4).
+      PGL_STUDIO_API_KEY: ${PGL_STUDIO_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+volumes:
+  pgl-postgres:
+  pgl-data:
