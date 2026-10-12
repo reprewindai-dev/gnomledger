@@ -103,6 +103,21 @@ class Settings(BaseSettings):
         return value.strip()
 
     @model_validator(mode="after")
+    def _require_durable_database_on_serverless_prod(self) -> "Settings":
+        # Serverless instances only have an ephemeral /tmp; a SQLite ledger there would lose
+        # its history on every recycle without any error.
+        if (
+            self.environment == "prod"
+            and _is_serverless_environment()
+            and self.database_url.startswith("sqlite")
+        ):
+            raise ValueError(
+                "DATABASE_URL must point to Postgres in production on Vercel: the default "
+                "SQLite file lives in ephemeral /tmp storage"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _require_signing_key_in_prod(self) -> "Settings":
         if self.environment != "prod":
             return self

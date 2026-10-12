@@ -13,6 +13,14 @@
     {
       "source": "/health",
       "destination": "/api/index.py"
+    },
+    {
+      "source": "/health/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/.well-known/(pgl-signing-key|x402.json)",
+      "destination": "/api/index.py"
     }
   ]
 }

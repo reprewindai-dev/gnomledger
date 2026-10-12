@@ -5,6 +5,7 @@
 - [Architecture](architecture.md)
 - [Build Scope](build-scope.md)
 - [Deployment Operations](deployment-operations.md)
+- [Deploying on the Docker Desktop stack](docker-desktop-deploy.md)
 - [Revenue Model](revenue-model.md)
 - [Security Compliance](security-compliance.md)
 - [Audit Readiness](AUDIT_READINESS.md)

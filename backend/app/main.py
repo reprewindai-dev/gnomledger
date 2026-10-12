@@ -104,9 +104,14 @@ def _build_app() -> FastAPI:
         lifespan=lifespan,
     )
     
+    # Browser origins allowed to call the API directly. Deployments add theirs through
+    # CORS_ORIGINS (a JSON list) or FRONTEND_ORIGIN; same-origin proxies need neither.
+    allowed_origins = ["https://veklom.com", "https://api.veklom.com", *settings.cors_origins]
+    if settings.frontend_origin:
+        allowed_origins.append(settings.frontend_origin)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["https://veklom.com", "https://api.veklom.com"],
+        allow_origins=list(dict.fromkeys(origin.rstrip("/") for origin in allowed_origins if origin)),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
