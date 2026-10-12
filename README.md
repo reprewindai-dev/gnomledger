@@ -21,7 +21,7 @@ The repository is structured as a deployable module that can be integrated into 
 - [Module Packaging Guide](docs/module-packaging.md)
 - [Architecture](docs/architecture.md)
 - [Deployment Operations](docs/deployment-operations.md)
-- [Deploying on Vercel](docs/vercel-deploy.md)
+- [Deploying on the Docker Desktop stack](docs/docker-desktop-deploy.md)
 - [Security Compliance](docs/security-compliance.md)
 - [Audit Readiness](docs/AUDIT_READINESS.md)
 

@@ -2,6 +2,8 @@
 
 > [!IMPORTANT]
 > Read [`../00_VEKLOM_BIBLE.md`](../00_VEKLOM_BIBLE.md) first. Coolify/runtime evidence overrides historical deployment plans.
+>
+> **Owner decision (2026-10-07):** Coolify, Hetzner and Vercel are not part of Veklom. Veklom runs on Docker Desktop (WSL2) on the owner's Windows host behind a Cloudflare tunnel; see [Deploying on the Docker Desktop stack](docker-desktop-deploy.md). Coolify references below are historical.
 
 ## Current deployment model
 
