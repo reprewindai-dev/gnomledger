@@ -37,10 +37,24 @@ old chain head, old certificates read `unsigned_legacy` and new ones `signed`. N
    ```
 4. **Keep the data volume** (`veklom-capability-os-rc1_gnomledger-data`).
 
+## One click (Windows)
+
+Download `Upgrade-Veklom.cmd` from the repo root and double-click it. It fetches these scripts
+into `%USERPROFILE%\veklom-upgrade\gnomledger` with your Git login and runs
+`scripts/veklom-upgrade.sh` in WSL. That first writes a read-only report of the running stack
+(containers, where each Compose project was started from, and a dry run of every upgrade) to
+`%USERPROFILE%\veklom-upgrade\stack-report-*.txt`. Then it asks, one step at a time: Genome
+Ledger + CAPPO on `veklom-staging`, the same on `veklom-capability-os-rc1` (only after staging
+succeeded), then cAPI on each. Nothing changes until you answer `y`.
+
 ## One command
 
 `scripts/upgrade-capos-stack.sh` does the steps below for `gnomledger-api` and `cappo-backend`
-and applies the rules above. From WSL on the Docker Desktop host, in a checkout of this repo:
+(and, with `--services capi`, for cAPI) and applies the rules above. It works whether the stack
+was started from Windows or WSL, whether a service builds from a checkout or runs a prebuilt
+image (it then rebuilds that tag from `main` and keeps the old one as `veklom-rollback/...`), and
+it stashes local edits or leaves a side branch only after listing that in its plan. From WSL on
+the Docker Desktop host, in a checkout of this repo:
 
 ```sh
 scripts/upgrade-capos-stack.sh veklom-staging --dry-run      # shows what it will do
