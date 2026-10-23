@@ -1,5 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-# Scripts run in WSL/Linux need LF; the Windows launcher needs CRLF.
+# Scripts run in WSL/Linux need LF; the Windows launcher is stored with CRLF as is.
 *.sh text eol=lf
-*.cmd text eol=crlf
+*.cmd -text
